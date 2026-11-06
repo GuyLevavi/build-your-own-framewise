@@ -1,0 +1,61 @@
+{
+  "nodes": {
+    "course": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793994933,
+        "narHash": "sha256-85CX/amdzouApzveMQ80PHlDcwU5Ob/rcdAL1dhVcjE=",
+        "ref": "refs/heads/main",
+        "rev": "31bc854d090932317a8d9682343f79312673d052",
+        "revCount": 2,
+        "type": "git",
+        "url": "https://github.com/GuyLevavi/build-your-own-framewise"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://github.com/GuyLevavi/build-your-own-framewise"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1793726008,
+        "narHash": "sha256-jQp1wKvbwWdLBASTXkSi/VYmDJ5AbBi1WvcMt9HWJC8=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "1d060086d60cb76a40cf37109f979d88a5bd6396",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "course": "course",
+        "nixpkgs": "nixpkgs",
+        "tester": "tester"
+      }
+    },
+    "tester": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793994912,
+        "narHash": "sha256-+TJGxBg4l4SQ2McocGwqgMiZcMNTJpm11of+RFAt3UY=",
+        "ref": "refs/heads/main",
+        "rev": "89f836f780b7e0d771e7f106328678f054ef679c",
+        "revCount": 1,
+        "type": "git",
+        "url": "https://github.com/GuyLevavi/framewise-tester"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://github.com/GuyLevavi/framewise-tester"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
