@@ -1,0 +1,148 @@
+---
+# Layout and field meanings follow codecrafters-io/build-your-own-http-server (MIT, see LICENSE).
+slug: "framewise"
+name: "Build your own Framewise"
+short_name: "Framewise"
+release_status: "alpha"
+
+description_md: |-
+  Framewise is a small video analytics service: it reads recorded video, finds when something
+  moves, and serves the results over HTTP. In this challenge you'll build it from an empty
+  `main.py` to a hardened API that survives restarts.
+
+  Along the way you'll learn about OpenCV, frame differencing, YAML config, FastAPI, background
+  workers, SQLite persistence and API keys.
+
+short_description_md: |-
+  Learn about video frames, motion detection, HTTP APIs and job queues
+
+completion_percentage: 30
+
+languages:
+  - slug: "python"
+
+marketing:
+  difficulty: medium
+  sample_extension_idea_title: "Object detection"
+  sample_extension_idea_description: "Swap the motion detector for YOLO behind the same job API"
+  testimonials: []
+
+stages:
+  # Probe a video
+  - slug: "pb1"
+    name: "Print the frame size"
+    difficulty: very_easy
+    marketing_md: |-
+      In this stage, you'll open a video with OpenCV and print its width and height as JSON.
+
+  - slug: "pb2"
+    name: "Report frame rate and length"
+    difficulty: very_easy
+    marketing_md: |-
+      In this stage, you'll add the frame rate, frame count and duration to the probe output.
+
+  - slug: "pb3"
+    name: "Handle a missing file"
+    difficulty: easy
+    marketing_md: |-
+      In this stage, you'll make a missing file fail with a clear message instead of a traceback.
+
+  - slug: "pb4"
+    name: "Handle a corrupt file"
+    difficulty: easy
+    marketing_md: |-
+      In this stage, you'll reject files that exist but are not playable video.
+
+  - slug: "pb5"
+    name: "Save sample frames"
+    difficulty: easy
+    marketing_md: |-
+      In this stage, you'll save every Nth frame as a JPEG, reading the video one frame at a time.
+
+  # Find motion
+  - slug: "mo1"
+    name: "Detect motion"
+    difficulty: easy
+    marketing_md: |-
+      In this stage, you'll compare consecutive frames and report when the picture changes.
+
+  - slug: "mo2"
+    name: "Split motion into segments"
+    difficulty: easy
+    marketing_md: |-
+      In this stage, you'll report separate bursts of motion as separate segments.
+
+  - slug: "mo3"
+    name: "Bridge short pauses"
+    difficulty: easy
+    marketing_md: |-
+      In this stage, you'll merge segments separated by a pause shorter than half a second.
+
+  - slug: "mo4"
+    name: "Ignore sensor noise"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll add a pixel threshold and a minimum area so noise is not motion.
+
+  # Configure detectors
+  - slug: "cf1"
+    name: "Named detectors in YAML"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll load named detector settings from a YAML file and pick one by name.
+
+  - slug: "cf2"
+    name: "Reject a bad config"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll validate the config and name the exact setting that is wrong.
+
+  # Serve it
+  - slug: "ap1"
+    name: "Serve a health check"
+    difficulty: easy
+    marketing_md: |-
+      In this stage, you'll start an HTTP server that answers GET /health.
+
+  - slug: "ap2"
+    name: "Upload a video"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll accept multipart uploads, store them and describe them by id.
+
+  - slug: "ap3"
+    name: "Run a job"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll run motion analysis on an uploaded video as a job with a status.
+
+  - slug: "ap4"
+    name: "Report job errors"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll return the right status codes for bad requests and fail jobs cleanly.
+
+  - slug: "ap5"
+    name: "Run jobs in the background"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll move analysis off the request path into a background worker.
+
+  - slug: "ap6"
+    name: "Survive a restart"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll persist videos and jobs so a restart loses nothing, not even queued jobs.
+
+  # Harden it
+  - slug: "hd1"
+    name: "Require an API key"
+    difficulty: easy
+    marketing_md: |-
+      In this stage, you'll protect every endpoint except /health with an API key.
+
+  - slug: "hd2"
+    name: "Limit uploads"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll reject uploads that are too large or not video files.

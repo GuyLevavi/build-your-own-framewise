@@ -1,0 +1,97 @@
+diff --git a/lib/models/dockerfile.ts b/lib/models/dockerfile.ts
+index 1e8d0eb..da623d7 100644
+--- a/lib/models/dockerfile.ts
++++ b/lib/models/dockerfile.ts
+@@ -75,6 +75,23 @@ export default class Dockerfile {
+   }
+ 
+   async processContents() {
++    // Local patch: add the sections CodeCrafters' backend would add, without calling it.
++    if (process.env.COURSE_SDK_OFFLINE) {
++      const lines = this.contents.split("\n");
++      const fromIndex = lines.findIndex((line) => line.startsWith("FROM "));
++      lines.splice(fromIndex + 1, 0, "", "# BEGIN GENERATED SECTION", "ENV TESTER_DIR=/var/opt/tester", "# END GENERATED SECTION");
++      lines.push(
++        "",
++        "# BEGIN GENERATED SECTION",
++        "WORKDIR /app",
++        "COPY . /app",
++        "RUN mkdir -p /var/opt && rm -rf /app/test-runner && mv /app/tester /var/opt/tester && chmod -R +rw /app",
++        "# END GENERATED SECTION"
++      );
++      this._processedContentsCache = lines.join("\n");
++      return;
++    }
++
+     const response = await fetch("https://backend.codecrafters.io/services/course_sdk/process_dockerfile", {
+       method: "POST",
+       headers: {
+diff --git a/lib/tester-downloader.ts b/lib/tester-downloader.ts
+index b478f3f..6fd18b3 100644
+--- a/lib/tester-downloader.ts
++++ b/lib/tester-downloader.ts
+@@ -23,6 +23,12 @@ export default class TesterDownloader {
+   }
+ 
+   async downloadIfNeeded(): Promise<string> {
++    // Local patch: use a tester built on this machine instead of a GitHub release.
++    if (process.env.COURSE_SDK_TESTER_DIR) {
++      this.latestVersion = "local";
++      return this.testerDir;
++    }
++
+     this.latestVersion = await this.fetchLatestTesterVersion();
+ 
+     if (await fs.promises.exists(this.testerDir)) {
+@@ -77,6 +83,9 @@ export default class TesterDownloader {
+     if (!this.latestVersion) {
+       throw new Error("Must call downloadIfNeeded() before accessing testerDir");
+     }
++    if (process.env.COURSE_SDK_TESTER_DIR) {
++      return path.resolve(process.env.COURSE_SDK_TESTER_DIR);
++    }
+     return path.join(this.testersRootDir, `${this.course.slug}-${this.latestVersion}`);
+   }
+ 
+diff --git a/lib/testers/dockerfile-tester.ts b/lib/testers/dockerfile-tester.ts
+index 2cab2c9..b3b2b01 100644
+--- a/lib/testers/dockerfile-tester.ts
++++ b/lib/testers/dockerfile-tester.ts
+@@ -45,7 +45,8 @@ export default class DockerfileTester extends BaseTester {
+ 
+   async buildImage() {
+     const command = `docker build -t ${this.slug} -f ${this.dockerfile.processedPath} ${this.copiedStarterDir}`;
+-    const expectedOutput = `naming to docker.io/library/${this.slug}`;
++    // Local patch: podman prints no 'naming to' line, so only the exit code counts offline.
++    const expectedOutput = process.env.COURSE_SDK_OFFLINE ? "" : `naming to docker.io/library/${this.slug}`;
+     await this.assertStderrContains(command, expectedOutput);
+   }
+ 
+diff --git a/lib/testers/solution-tester.ts b/lib/testers/solution-tester.ts
+index 22f12d2..a6465ad 100644
+--- a/lib/testers/solution-tester.ts
++++ b/lib/testers/solution-tester.ts
+@@ -106,7 +106,8 @@ export default class SolutionTester extends BaseTester {
+ 
+   private async buildImage(copiedCodeDir: string) {
+     const command = `docker build -t ${this.slug} -f ${this.dockerfile!.processedPath} ${copiedCodeDir}`;
+-    const expectedOutput = `naming to docker.io/library/${this.slug}`;
++    // Local patch: podman prints no 'naming to' line, so only the exit code counts offline.
++    const expectedOutput = process.env.COURSE_SDK_OFFLINE ? "" : `naming to docker.io/library/${this.slug}`;
+     await this.assertStderrContains(command, expectedOutput);
+   }
+ 
+diff --git a/lib/testers/starter-code-tester.ts b/lib/testers/starter-code-tester.ts
+index c632d24..380b6d6 100644
+--- a/lib/testers/starter-code-tester.ts
++++ b/lib/testers/starter-code-tester.ts
+@@ -186,7 +186,8 @@ export default class StarterCodeTester extends BaseTester {
+ 
+   async buildImage() {
+     const command = `docker build -t ${this.slug} -f ${this.dockerfile!.processedPath} ${this.copiedStarterDir}`;
+-    const expectedOutput = `naming to docker.io/library/${this.slug}`;
++    // Local patch: podman prints no 'naming to' line, so only the exit code counts offline.
++    const expectedOutput = process.env.COURSE_SDK_OFFLINE ? "" : `naming to docker.io/library/${this.slug}`;
+     await this.assertStderrContains(command, expectedOutput);
+   }
+ 

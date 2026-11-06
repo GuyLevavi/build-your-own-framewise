@@ -1,0 +1,135 @@
+"""The HTTP API: upload videos, submit jobs, read results. A worker thread runs the jobs."""
+
+import hmac
+import logging
+import queue
+import shutil
+import threading
+import uuid
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
+from app import motion
+from app.config import Config, ConfigError
+from app.store import Store
+from app.video import VideoError
+
+log = logging.getLogger(__name__)
+
+VIDEO_SUFFIXES = {".avi", ".mp4", ".mov", ".mkv"}
+MULTIPART_SLACK = 64 * 1024  # room for multipart headers when checking Content-Length early
+
+
+class JobRequest(BaseModel):
+    video_id: str
+    detector: str = "default"
+
+
+class Worker:
+    """Runs jobs one at a time on a background thread, so requests never wait for analysis."""
+
+    def __init__(self, store: Store, config: Config) -> None:
+        self.store = store
+        self.config = config
+        self.queue: queue.Queue[str] = queue.Queue()
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def submit(self, job_id: str) -> None:
+        self.queue.put(job_id)
+
+    def _run(self) -> None:
+        while True:
+            self._process(self.queue.get())
+
+    def _process(self, job_id: str) -> None:
+        job = self.store.job(job_id)
+        video = self.store.video(job["video_id"]) if job else None
+        if job is None or video is None:
+            return
+        self.store.mark_running(job_id)
+        try:
+            detector = self.config.detector(job["detector"])
+            segments = motion.analyze(Path(video["path"]), detector, self.config.max_gap_s)
+        except (VideoError, ConfigError) as e:
+            self.store.fail(job_id, str(e))
+        except Exception as e:
+            log.exception("job %s crashed", job_id)
+            self.store.fail(job_id, f"internal error: {e}")
+        else:
+            self.store.finish(job_id, segments)
+
+
+def create_app(
+    data_dir: Path, config: Config, api_key: str | None, max_upload_bytes: int
+) -> FastAPI:
+    videos_dir = data_dir / "videos"
+    videos_dir.mkdir(parents=True, exist_ok=True)
+    store = Store(data_dir)
+    worker = Worker(store, config)
+    for job_id in store.unfinished():
+        worker.submit(job_id)
+
+    app = FastAPI(title="Framewise")
+
+    @app.middleware("http")
+    async def guard(request: Request, call_next):  # noqa: ANN001, ANN202
+        if api_key and request.url.path != "/health":
+            given = request.headers.get("x-api-key", "")
+            if not hmac.compare_digest(given.encode(), api_key.encode()):
+                return JSONResponse({"detail": "missing or wrong X-API-Key"}, status_code=401)
+        if request.method == "POST" and request.url.path == "/videos":
+            length = request.headers.get("content-length")
+            if length and length.isdigit() and int(length) > max_upload_bytes + MULTIPART_SLACK:
+                return JSONResponse({"detail": "upload too large"}, status_code=413)
+        return await call_next(request)
+
+    @app.get("/health")
+    def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.post("/videos", status_code=201)
+    def upload(file: UploadFile) -> dict[str, object]:
+        filename = Path(file.filename or "upload").name
+        suffix = Path(filename).suffix.lower()
+        if suffix not in VIDEO_SUFFIXES:
+            raise HTTPException(415, f"not a video file type: {filename!r}")
+        video_id = uuid.uuid4().hex
+        path = videos_dir / f"{video_id}{suffix}"
+        with path.open("wb") as out:
+            shutil.copyfileobj(file.file, out)
+        size = path.stat().st_size
+        if size > max_upload_bytes:
+            path.unlink()
+            raise HTTPException(413, f"upload is {size} bytes, limit is {max_upload_bytes}")
+        store.add_video(video_id, filename, path, size)
+        return {"video_id": video_id, "filename": filename, "size_bytes": size}
+
+    @app.get("/videos/{video_id}")
+    def get_video(video_id: str) -> dict[str, object]:
+        video = store.video(video_id)
+        if video is None:
+            raise HTTPException(404, f"no video {video_id!r}")
+        return {"video_id": video_id, "filename": video["filename"], "size_bytes": video["size_bytes"]}
+
+    @app.post("/jobs", status_code=202)
+    def submit(body: JobRequest) -> dict[str, object]:
+        if store.video(body.video_id) is None:
+            raise HTTPException(404, f"no video {body.video_id!r}")
+        if body.detector not in config.detectors:
+            raise HTTPException(422, f"unknown detector {body.detector!r}")
+        job_id = uuid.uuid4().hex
+        store.add_job(job_id, body.video_id, body.detector)
+        worker.submit(job_id)
+        return store.job(job_id) or {}
+
+    @app.get("/jobs/{job_id}")
+    def get_job(job_id: str) -> dict[str, object]:
+        job = store.job(job_id)
+        if job is None:
+            raise HTTPException(404, f"no job {job_id!r}")
+        return job
+
+    return app

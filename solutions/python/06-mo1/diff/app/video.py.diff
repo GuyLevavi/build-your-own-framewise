@@ -1,0 +1,76 @@
+@@ -1,62 +1,75 @@
+ """Read video files with OpenCV: metadata, and frames one at a time."""
+
+ from collections.abc import Iterator
+ from pathlib import Path
+
+ import cv2
+ import numpy as np
+
++
+ class VideoError(Exception):
+     """A video that is missing or unreadable. The message names the file."""
+
++
+ def _open(path: Path) -> cv2.VideoCapture:
+     if not path.is_file():
+         raise VideoError(f"{path}: no such file")
+     capture = cv2.VideoCapture(str(path))
+     if not capture.isOpened():
+         capture.release()
+         raise VideoError(f"{path}: not a readable video")
+     return capture
+
++
+ def probe(path: Path) -> dict[str, float | int]:
+     capture = _open(path)
+     try:
+         ok, _ = capture.read()
+         if not ok:
+             raise VideoError(f"{path}: not a readable video")
+         fps = capture.get(cv2.CAP_PROP_FPS)
+         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+         return {
+             "width": int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
+             "height": int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+             "fps": fps,
+             "frame_count": frame_count,
+             "duration_s": frame_count / fps if fps else 0.0,
+         }
+     finally:
+         capture.release()
+
++
+ def frames(path: Path) -> Iterator[tuple[int, np.ndarray]]:
+     """Yield (index, BGR frame) for every frame, without loading the whole video."""
+     capture = _open(path)
+     try:
+         index = 0
+         while True:
+             ok, frame = capture.read()
+             if not ok:
+                 if index == 0:
+                     raise VideoError(f"{path}: not a readable video")
+                 return
+             yield index, frame
+             index += 1
+     finally:
+         capture.release()
+
++
++def fps_of(path: Path) -> float:
++    capture = _open(path)
++    try:
++        return capture.get(cv2.CAP_PROP_FPS)
++    finally:
++        capture.release()
++
++
+ def save_every(path: Path, every: int, out: Path) -> int:
+     out.mkdir(parents=True, exist_ok=True)
+     saved = 0
+     for index, frame in frames(path):
+         if index % every == 0:
+             cv2.imwrite(str(out / f"frame_{index:05d}.jpg"), frame)
+             saved += 1
+     return saved

@@ -1,0 +1,10 @@
+# Set this to true if you want debug logs.
+#
+# These can be VERY verbose, so we suggest turning them off
+# unless you really need them.
+debug: false
+
+# The {{language_name}} version used to run your code.
+#
+# Available versions: {{buildpack_with_version}}
+buildpack: {{buildpack_with_version}}

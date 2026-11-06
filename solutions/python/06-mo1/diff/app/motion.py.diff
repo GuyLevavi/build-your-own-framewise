@@ -1,0 +1,26 @@
+@@ -0,0 +1,25 @@
++"""Find motion: compare each frame with the previous one."""
++
++from pathlib import Path
++
++import numpy as np
++
++from app import video
++
++
++def motion_frames(path: Path) -> list[int]:
++    hits: list[int] = []
++    previous = None
++    for index, frame in video.frames(path):
++        if previous is not None and np.any(frame != previous):
++            hits.append(index)
++        previous = frame
++    return hits
++
++
++def analyze(path: Path) -> list[dict[str, float]]:
++    hits = motion_frames(path)
++    if not hits:
++        return []
++    fps = video.fps_of(path)
++    return [{"start_s": hits[0] / fps, "end_s": hits[-1] / fps}]

@@ -1,0 +1,42 @@
+"""The HTTP API: upload videos."""
+
+import shutil
+import uuid
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, UploadFile
+
+
+def create_app(data_dir: Path) -> FastAPI:
+    videos_dir = data_dir / "videos"
+    videos_dir.mkdir(parents=True, exist_ok=True)
+    videos: dict[str, dict[str, object]] = {}
+
+    app = FastAPI(title="Framewise")
+
+    @app.get("/health")
+    def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.post("/videos", status_code=201)
+    def upload(file: UploadFile) -> dict[str, object]:
+        filename = Path(file.filename or "upload").name
+        video_id = uuid.uuid4().hex
+        path = videos_dir / f"{video_id}{Path(filename).suffix.lower()}"
+        with path.open("wb") as out:
+            shutil.copyfileobj(file.file, out)
+        videos[video_id] = {
+            "video_id": video_id,
+            "filename": filename,
+            "size_bytes": path.stat().st_size,
+            "path": path,
+        }
+        return {k: v for k, v in videos[video_id].items() if k != "path"}
+
+    @app.get("/videos/{video_id}")
+    def get_video(video_id: str) -> dict[str, object]:
+        if video_id not in videos:
+            raise HTTPException(404, f"no video {video_id!r}")
+        return {k: v for k, v in videos[video_id].items() if k != "path"}
+
+    return app

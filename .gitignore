@@ -1,0 +1,3 @@
+tools/.course-sdk/
+__pycache__/
+*.pyc

@@ -1,0 +1,74 @@
+@@ -1,34 +1,68 @@
+ """Detector settings: built-in defaults, or named detectors from a YAML file."""
+
+ from dataclasses import dataclass
+ from pathlib import Path
+
+ import yaml
+
+
++class ConfigError(Exception):
++    """A config file that is missing or invalid. The message names the bad setting."""
++
++
+ @dataclass(frozen=True)
+ class Detector:
+     threshold: int = 25
+     min_area: int = 20
+
+
+ @dataclass(frozen=True)
+ class Config:
+     detectors: dict[str, Detector]
+     max_gap_s: float = 0.5
+
+     def detector(self, name: str) -> Detector:
++        if name not in self.detectors:
++            known = ", ".join(sorted(self.detectors))
++            raise ConfigError(f"unknown detector {name!r} (known: {known})")
+         return self.detectors[name]
+
+
+ DEFAULT = Config(detectors={"default": Detector()})
+
+
++def _int(value: object, where: str, low: int, high: int | None = None) -> int:
++    if isinstance(value, bool) or not isinstance(value, int) or value < low or (
++        high is not None and value > high
++    ):
++        bound = f"between {low} and {high}" if high is not None else f">= {low}"
++        raise ConfigError(f"{where} must be an integer {bound}, got {value!r}")
++    return value
++
++
+ def load(path: Path | None) -> Config:
+     if path is None:
+         return DEFAULT
+-    raw = yaml.safe_load(path.read_text())
+-    return Config(
+-        detectors={str(name): Detector(**settings) for name, settings in raw["detectors"].items()},
+-        max_gap_s=float(raw.get("max_gap_s", 0.5)),
+-    )
++    try:
++        raw = yaml.safe_load(path.read_text())
++    except FileNotFoundError:
++        raise ConfigError(f"{path}: no such config file") from None
++    except yaml.YAMLError as e:
++        raise ConfigError(f"{path}: not valid YAML ({e})") from None
++    if not isinstance(raw, dict) or not isinstance(raw.get("detectors"), dict):
++        raise ConfigError(f"{path}: needs a 'detectors' mapping")
++
++    max_gap_s = raw.get("max_gap_s", 0.5)
++    if isinstance(max_gap_s, bool) or not isinstance(max_gap_s, int | float) or max_gap_s < 0:
++        raise ConfigError(f"{path}: max_gap_s must be a number >= 0, got {max_gap_s!r}")
++
++    detectors: dict[str, Detector] = {}
++    for name, settings in raw["detectors"].items():
++        if not isinstance(settings, dict):
++            raise ConfigError(f"{path}: detectors.{name} must be a mapping")
++        where = f"{path}: detectors.{name}"
++        detectors[str(name)] = Detector(
++            threshold=_int(settings.get("threshold", 25), f"{where}.threshold", 0, 255),
++            min_area=_int(settings.get("min_area", 20), f"{where}.min_area", 1),
++        )
++    return Config(detectors=detectors, max_gap_s=float(max_gap_s))
