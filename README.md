@@ -6,7 +6,11 @@ learner from an empty `main.py` to a hardened video-analysis API. Everything run
 podman; no CodeCrafters account or server is involved.
 
 Layout copied from [codecrafters-io/build-your-own-http-server](https://github.com/codecrafters-io/build-your-own-http-server);
-the tester is in `../framewise-tester`. Both are MIT; see `LICENSE` for CodeCrafters' notice.
+the tester is [framewise-tester](https://github.com/GuyLevavi/framewise-tester) (clone it next to this repo
+for the tools below). Both are MIT; see `LICENSE` for CodeCrafters' notice. Learners work in
+[codecrafters-framewise-python](https://github.com/GuyLevavi/codecrafters-framewise-python), which pins both
+as flake inputs and runs `./test.sh` with Python from nixpkgs (the protocol of
+[build-your-own-y](https://github.com/GuyLevavi/build-your-own-y)).
 Stage texts are written for this course, not copied.
 
 ## Try it as a learner
@@ -69,23 +73,22 @@ events SQL (10). The full assignment still covers them.
 | `dockerfiles/python-3.13.Dockerfile` | the image programs run in |
 | `tools/run_tests.sh` | run the tester against one directory |
 | `tools/verify_course.sh` | prove every stage: solution N passes 1..N, solution N-1 fails stage N |
-| `tools/course-sdk` | CodeCrafters' course-sdk, patched to run offline with podman |
 
 ## Checking the course itself
 
 ```sh
 tools/verify_course.sh                 # all 19 stages, ~10 min at 0.5 CPU; logs in tools/.verify/
-tools/course-sdk compile python        # regenerate compiled_starters/ and the solution diffs
-tools/course-sdk test python           # course-sdk's own check: Dockerfile, starter, every solution
+../build-your-own-y/tools/course-sdk compile python   # regenerate compiled_starters/ and the solution diffs
+../build-your-own-y/tools/course-sdk test python      # course-sdk's own check: Dockerfile, starter, every solution
 ```
 
-`tools/course-sdk` clones course-sdk at the revision in `tools/course-sdk.rev` and applies
-`tools/course-sdk-offline.patch`, which makes it use the local tester instead of downloading a
+[build-your-own-y](https://github.com/GuyLevavi/build-your-own-y)'s `tools/course-sdk` is course-sdk with an offline patch that makes it use the local tester instead of downloading a
 release, add the Dockerfile's generated sections itself instead of calling CodeCrafters' backend,
 and accept podman's build output. `tools/registries.conf` lets podman resolve the short image
 names course-sdk uses.
 
-`nix develop` gives Go, Bun and make; Python only ever runs in containers.
+`nix develop` gives Go, Bun, make and podman; here Python only runs in containers. (The solution repo
+runs it from nixpkgs instead.)
 
 ## Changing a stage
 
@@ -93,5 +96,5 @@ names course-sdk uses.
 2. Update `solutions/python/NN-slug/code/app/` (and the later stages that build on it).
 3. `make -C ../framewise-tester build && tools/verify_course.sh NN NN`.
 
-New fixtures: edit `../framewise-tester/scripts/gen_fixtures.py`, run `make fixtures` there, and
-check `go test ./internal/` still agrees with the times quoted in the stage texts.
+New clips: edit `../framewise-tester/internal/clips.go` (they are generated at run time, in Go), and
+check `make test` there still agrees with the times quoted in the stage texts.
