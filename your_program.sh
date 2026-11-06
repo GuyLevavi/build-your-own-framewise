@@ -12,4 +12,5 @@ set -e # Exit early if any commands fail
 #
 # - Edit this to change how your program runs locally
 # - Edit .codecrafters/run.sh to change how your program runs remotely
-exec uv run --quiet -m app.main "$@"
+# Local: the devShell's Python has the dependencies (see flake.nix), so uv isn't used.
+exec python -m app.main "$@"

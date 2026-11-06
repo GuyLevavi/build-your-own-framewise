@@ -50,11 +50,21 @@
             packages = with pkgs; [
               git
               bash
+              # The dependencies of pyproject.toml, from nixpkgs: opencv-python's wheels
+              # don't run on NixOS. your_program.sh runs this Python directly.
+              (python3.withPackages (
+                ps: with ps; [
+                  fastapi
+                  numpy
+                  opencv4
+                  python-multipart
+                  pyyaml
+                  uvicorn
+                ]
+              ))
               uv
-              python3
             ];
-            UV_PYTHON_DOWNLOADS = "never";
-            UV_PYTHON = "${pkgs.python3}/bin/python3";
+            PYTHONDONTWRITEBYTECODE = "1";
             # Read by test.sh.
             FRAMEWISE_COURSE_DIR = "${course}";
             FRAMEWISE_TESTER_BIN = "${self.packages.${system}.framewise-tester}/bin/tester";

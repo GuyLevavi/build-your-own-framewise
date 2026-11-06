@@ -17,7 +17,8 @@ direnv allow         # or: nix develop
 
 ## Dev shell
 
-`nix develop`, or direnv via `.envrc`, provides Python 3 and uv and the tester.
+`nix develop`, or direnv via `.envrc`, provides Python 3 with OpenCV, NumPy, FastAPI, Uvicorn and PyYAML,
+and the tester.
 `test.sh` enters the dev shell by itself if needed.
 
 `nix flake update course tester` pulls newer upstream stages and tester fixes.
@@ -47,4 +48,8 @@ builds the program and then runs it.
 ## Local deviations from the starter
 
 - `test.sh`, `.stage`, `flake.nix`, `flake.lock` and `.envrc` are local additions.
+- `your_program.sh` runs `python -m app.main` instead of `uv run`: the devShell's Python
+  comes from nixpkgs with the dependencies in `pyproject.toml` (OpenCV, NumPy, FastAPI,
+  Uvicorn, PyYAML, python-multipart), because the `opencv-python-headless` wheel that uv
+  would install doesn't run on NixOS. Versions follow nixpkgs, not `uv.lock`.
 
