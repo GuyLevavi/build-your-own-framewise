@@ -123,11 +123,7 @@ func (c clip) bytes() []byte {
 	if data, ok := encoded[c.name]; ok {
 		return data
 	}
-	frames := make([]image.Image, c.frames)
-	for i := range frames {
-		frames[i] = c.render(i)
-	}
-	data, err := encodeMJPEGAVI(frames, c.fps, 90)
+	data, err := encodeMJPEGAVI(c.frames, c.render, c.fps, 90)
 	if err != nil {
 		panic(fmt.Sprintf("CodeCrafters Internal Error: encoding %s: %v", c.name, err))
 	}

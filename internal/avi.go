@@ -7,19 +7,23 @@ import (
 	"image/jpeg"
 )
 
-// encodeMJPEGAVI writes frames as an AVI 1.0 file with one MJPG video stream:
-// every frame is a JPEG of its own, so two identical pictures decode to
-// identical pixels. Nothing outside the standard library is needed, so the
+// encodeMJPEGAVI writes n frames as an AVI 1.0 file with one MJPG video
+// stream: every frame is a JPEG of its own, so two identical pictures decode
+// to identical pixels. Frames are rendered one at a time by frame(i) and only
+// their JPEGs are kept, so a ten-minute or 1080p clip never holds its raw
+// pixels in memory. Nothing outside the standard library is needed, so the
 // tester carries no binary fixtures.
-func encodeMJPEGAVI(frames []image.Image, fps int, quality int) ([]byte, error) {
-	width := frames[0].Bounds().Dx()
-	height := frames[0].Bounds().Dy()
-
-	var jpegs [][]byte
+func encodeMJPEGAVI(n int, frame func(i int) image.Image, fps int, quality int) ([]byte, error) {
+	var width, height int
+	jpegs := make([][]byte, 0, n)
 	maxFrame := 0
-	for _, frame := range frames {
+	for i := range n {
+		img := frame(i)
+		if i == 0 {
+			width, height = img.Bounds().Dx(), img.Bounds().Dy()
+		}
 		var buf bytes.Buffer
-		if err := jpeg.Encode(&buf, frame, &jpeg.Options{Quality: quality}); err != nil {
+		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
 			return nil, err
 		}
 		jpegs = append(jpegs, buf.Bytes())
@@ -49,7 +53,7 @@ func encodeMJPEGAVI(frames []image.Image, fps int, quality int) ([]byte, error) 
 	u32(&avih, uint32(maxFrame*fps))  // dwMaxBytesPerSec
 	u32(&avih, 0)                     // dwPaddingGranularity
 	u32(&avih, 0x10)                  // dwFlags: AVIF_HASINDEX
-	u32(&avih, uint32(len(frames)))   // dwTotalFrames
+	u32(&avih, uint32(len(jpegs)))    // dwTotalFrames
 	u32(&avih, 0)                     // dwInitialFrames
 	u32(&avih, 1)                     // dwStreams
 	u32(&avih, uint32(maxFrame))      // dwSuggestedBufferSize
@@ -60,18 +64,18 @@ func encodeMJPEGAVI(frames []image.Image, fps int, quality int) ([]byte, error) 
 	var strh bytes.Buffer
 	strh.WriteString("vids")
 	strh.WriteString("MJPG")
-	u32(&strh, 0)                   // dwFlags
-	u16(&strh, 0)                   // wPriority
-	u16(&strh, 0)                   // wLanguage
-	u32(&strh, 0)                   // dwInitialFrames
-	u32(&strh, 1)                   // dwScale
-	u32(&strh, uint32(fps))         // dwRate
-	u32(&strh, 0)                   // dwStart
-	u32(&strh, uint32(len(frames))) // dwLength
-	u32(&strh, uint32(maxFrame))    // dwSuggestedBufferSize
-	u32(&strh, 0xFFFFFFFF)          // dwQuality
-	u32(&strh, 0)                   // dwSampleSize
-	u16(&strh, 0)                   // rcFrame
+	u32(&strh, 0)                  // dwFlags
+	u16(&strh, 0)                  // wPriority
+	u16(&strh, 0)                  // wLanguage
+	u32(&strh, 0)                  // dwInitialFrames
+	u32(&strh, 1)                  // dwScale
+	u32(&strh, uint32(fps))        // dwRate
+	u32(&strh, 0)                  // dwStart
+	u32(&strh, uint32(len(jpegs))) // dwLength
+	u32(&strh, uint32(maxFrame))   // dwSuggestedBufferSize
+	u32(&strh, 0xFFFFFFFF)         // dwQuality
+	u32(&strh, 0)                  // dwSampleSize
+	u16(&strh, 0)                  // rcFrame
 	u16(&strh, 0)
 	u16(&strh, uint16(width))
 	u16(&strh, uint16(height))
