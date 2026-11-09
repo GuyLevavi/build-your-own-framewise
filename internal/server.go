@@ -8,18 +8,15 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 
-	"github.com/codecrafters-io/tester-utils/executable"
 	"github.com/codecrafters-io/tester-utils/test_case_harness"
 )
 
 // server is a running `./your_program.sh serve`.
 type server struct {
 	harness *test_case_harness.TestCaseHarness
-	exe     *executable.Executable
+	p       *proc
 	base    string
 	apiKey  string // sent as X-API-Key when set
 	client  *http.Client
@@ -37,39 +34,20 @@ func freePort() int {
 // startServer starts the server with env set (and every other FRAMEWISE_*
 // variable unset), and waits up to 30 s for GET /health to answer 200.
 func startServer(harness *test_case_harness.TestCaseHarness, dataDir string, env map[string]string) (*server, error) {
-	for _, name := range []string{"FRAMEWISE_API_KEY", "FRAMEWISE_MAX_UPLOAD_MB"} {
-		os.Unsetenv(name)
-	}
-	var shown []string
-	for name, value := range env {
-		os.Setenv(name, value)
-		shown = append(shown, name+"="+value)
-	}
-	defer func() {
-		for name := range env {
-			os.Unsetenv(name)
-		}
-	}()
-
 	port := freePort()
-	args := []string{"serve", "--port", fmt.Sprint(port), "--data-dir", dataDir}
-	harness.Logger.Infof("$ %s./your_program.sh %s", strings.Join(append(shown, ""), " "), strings.Join(args, " "))
-	exe := harness.NewExecutable()
-	exe.TimeoutInMilliseconds = 10 * 60 * 1000 // stopped by the test, or at teardown
-	if err := exe.Start(args...); err != nil {
-		return nil, fmt.Errorf("couldn't start your program: %v", err)
+	p, err := startProc(harness, "server", env, "serve", "--port", fmt.Sprint(port), "--data-dir", dataDir)
+	if err != nil {
+		return nil, err
 	}
 	s := &server{
 		harness: harness,
-		exe:     exe,
+		p:       p,
 		base:    fmt.Sprintf("http://127.0.0.1:%d", port),
 		client:  &http.Client{Timeout: 30 * time.Second},
 	}
-	harness.RegisterTeardownFunc(func() { exe.Kill() })
-
 	deadline := time.Now().Add(30 * time.Second)
 	for {
-		if exe.HasExited() {
+		if p.exited() {
 			return nil, fmt.Errorf("your program exited before answering GET /health")
 		}
 		response, err := (&http.Client{Timeout: time.Second}).Get(s.base + "/health")
@@ -91,10 +69,7 @@ func startServer(harness *test_case_harness.TestCaseHarness, dataDir string, env
 }
 
 // stop sends SIGTERM to the server's process group.
-func (s *server) stop() {
-	s.harness.Logger.Infof("Stopping the server (SIGTERM)")
-	s.exe.Kill()
-}
+func (s *server) stop() { s.p.stop() }
 
 type response struct {
 	status int
@@ -105,8 +80,12 @@ type response struct {
 
 func (r response) describe() string { return fmt.Sprintf("%d %s", r.status, truncate(string(r.raw))) }
 
-func (s *server) send(method, path, contentType string, body []byte, headers map[string]string) (response, error) {
-	request, err := http.NewRequest(method, s.base+path, bytes.NewReader(body))
+func (s *server) send(method, path, contentType string, body []byte, headers map[string]string, stream ...io.Reader) (response, error) {
+	var reader io.Reader = bytes.NewReader(body)
+	if len(stream) > 0 {
+		reader = stream[0]
+	}
+	request, err := http.NewRequest(method, s.base+path, reader)
 	if err != nil {
 		return response{}, err
 	}
@@ -126,7 +105,7 @@ func (s *server) send(method, path, contentType string, body []byte, headers map
 	start := time.Now()
 	resp, err := s.client.Do(request)
 	if err != nil {
-		if s.exe.HasExited() {
+		if s.p.exited() {
 			return response{}, fmt.Errorf("%s %s: your server has exited", method, path)
 		}
 		return response{}, fmt.Errorf("%s %s: %v", method, path, err)
@@ -206,10 +185,10 @@ func (s *server) uploadClip(filename string, data []byte) (string, error) {
 }
 
 // submitJob posts a job and returns its id and the status in the answer.
-func (s *server) submitJob(videoID, detector string) (string, string, error) {
+func (s *server) submitJob(videoID, profileName string) (string, string, error) {
 	body := map[string]string{"video_id": videoID}
-	if detector != "" {
-		body["detector"] = detector
+	if profileName != "" {
+		body["profile"] = profileName
 	}
 	r, err := s.postJSON("/jobs", body)
 	if err != nil {
@@ -253,29 +232,29 @@ func (s *server) waitJob(id string, timeout time.Duration) (map[string]any, erro
 	}
 }
 
-// expectJobDone waits for the job and compares its segments with c's.
-func (s *server) expectJobDone(id string, c clip) (map[string]any, error) {
-	job, err := s.waitJob(id, 60*time.Second)
+// expectJobDone waits for the job and compares its labels with what p finds in sc.
+func (s *server) expectJobDone(id string, sc scene, p profile) (map[string]any, error) {
+	job, err := s.waitJob(id, 120*time.Second)
 	if err != nil {
 		return nil, err
 	}
 	if job["status"] != "DONE" {
 		return nil, fmt.Errorf("expected job %s to be DONE, got %v (error: %v)", id, job["status"], job["error"])
 	}
-	got, err := segmentsField(job, "segments")
+	got, err := labelsField(job, "labels")
 	if err != nil {
 		return nil, err
 	}
-	if err := compareSegments(got, c.segments(defaultMaxGapS), c.fps); err != nil {
+	if err := compareLabels(got, expectedLabels(sc, p), sc.fps); err != nil {
 		return nil, err
 	}
-	s.harness.Logger.Successf("✓ DONE: %s", formatSegments(got))
+	s.harness.Logger.Successf("✓ DONE: %s", formatLabels(got))
 	return job, nil
 }
 
-// runJob uploads c, runs a job on it and checks the result.
-func (s *server) runJob(c clip) error {
-	videoID, err := s.uploadClip(fmt.Sprintf("%s.avi", c.name), c.bytes())
+// runJob uploads sc, runs a job on it with the default profile and checks the result.
+func (s *server) runJob(sc scene) error {
+	videoID, err := s.uploadClip(fmt.Sprintf("%s.avi", sc.name), sc.bytes())
 	if err != nil {
 		return err
 	}
@@ -283,6 +262,30 @@ func (s *server) runJob(c clip) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.expectJobDone(jobID, c)
+	_, err = s.expectJobDone(jobID, sc, defaultProfile)
 	return err
+}
+
+// uploadStream posts a multipart upload of size bytes without holding it in
+// memory: the body is written through a pipe as the server reads it.
+func (s *server) uploadStream(filename string, size int64) (response, error) {
+	reader, writer := io.Pipe()
+	form := multipart.NewWriter(writer)
+	go func() {
+		part, err := form.CreateFormFile("file", filename)
+		if err == nil {
+			chunk := bytes.Repeat([]byte("framewise "), 6554) // 64 KiB
+			for left := size; left > 0 && err == nil; {
+				n := min(left, int64(len(chunk)))
+				_, err = part.Write(chunk[:n])
+				left -= n
+			}
+		}
+		if err == nil {
+			err = form.Close()
+		}
+		writer.CloseWithError(err)
+	}()
+	s.harness.Logger.Infof("POST /videos (file=%q, %.0f MiB, streamed)", filename, mib(size))
+	return s.send("POST", "/videos", form.FormDataContentType(), nil, map[string]string{}, reader)
 }

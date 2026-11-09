@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/codecrafters-io/tester-utils/random"
 )
@@ -232,6 +233,11 @@ func (s scene) render(i int) image.Image {
 	}
 	return img
 }
+
+var (
+	encodedMu sync.Mutex
+	encoded   = map[string][]byte{}
+)
 
 func (s scene) bytes() []byte {
 	encodedMu.Lock()

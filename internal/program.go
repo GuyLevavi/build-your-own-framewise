@@ -157,7 +157,7 @@ func compareSegments(got, want []segment, fps int) error {
 	return nil
 }
 
-// expectCleanFailure is the contract of stages 3, 4 and 11: a non-zero exit,
+// expectCleanFailure is the contract for bad input: a non-zero exit,
 // the given text in stderr, nothing on stdout and no traceback.
 func expectCleanFailure(result executable.ExecutableResult, mustMention string) error {
 	if result.ExitCode == 0 {
@@ -175,32 +175,22 @@ func expectCleanFailure(result executable.ExecutableResult, mustMention string) 
 	return nil
 }
 
-// analyze runs `analyze path extra...` and returns the segments.
-func analyze(harness *test_case_harness.TestCaseHarness, path string, extra ...string) ([]segment, error) {
-	result, err := runCLI(harness, append([]string{"analyze", path}, extra...)...)
+// runCLIWithEnv is runCLI with extra environment variables, shown in the log.
+func runCLIWithEnv(harness *test_case_harness.TestCaseHarness, env map[string]string, args ...string) (executable.ExecutableResult, error) {
+	var shown []string
+	for k := range env {
+		shown = append(shown, k+"=...")
+	}
+	harness.Logger.Infof("$ %s./your_program.sh %s", strings.Join(append(shown, ""), " "), strings.Join(args, " "))
+	exe := harness.NewExecutable()
+	exe.TimeoutInMilliseconds = 120 * 1000
+	var (
+		result executable.ExecutableResult
+		err    error
+	)
+	withEnv(env, func() { result, err = exe.Run(args...) })
 	if err != nil {
-		return nil, err
+		return result, fmt.Errorf("couldn't run your program: %v", err)
 	}
-	if result.ExitCode != 0 {
-		return nil, fmt.Errorf("expected exit code 0, got %d", result.ExitCode)
-	}
-	object, err := jsonObject(result.Stdout)
-	if err != nil {
-		return nil, err
-	}
-	return segmentsField(object, "segments")
-}
-
-// expectSegments analyzes c and compares with its segments for maxGapS.
-func expectSegments(harness *test_case_harness.TestCaseHarness, c clip, path string, maxGapS float64, extra ...string) error {
-	got, err := analyze(harness, path, extra...)
-	if err != nil {
-		return err
-	}
-	want := c.segments(maxGapS)
-	if err := compareSegments(got, want, c.fps); err != nil {
-		return err
-	}
-	harness.Logger.Successf("✓ %s", formatSegments(got))
-	return nil
+	return result, nil
 }

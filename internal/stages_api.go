@@ -2,7 +2,6 @@ package internal
 
 import (
 	"bytes"
-	"crypto/rand"
 	"fmt"
 	"io/fs"
 	"path/filepath"
@@ -16,8 +15,36 @@ func randomID() string {
 	return fmt.Sprintf("%s-%d", random.RandomWord(), random.RandomInt(100000, 999999))
 }
 
-func testServeHealth(harness *test_case_harness.TestCaseHarness) error {
-	s, err := startServer(harness, tempDir(harness), nil)
+func expectVideo(object map[string]any, filename string, size int64) error {
+	if object["filename"] != filename {
+		return fmt.Errorf("expected filename %q, got %v", filename, object["filename"])
+	}
+	got, err := intField(object, "size_bytes")
+	if err != nil {
+		return err
+	}
+	if got != size {
+		return fmt.Errorf("expected size_bytes %d, got %d", size, got)
+	}
+	return nil
+}
+
+// ap1's limits: uploads up to 200 MiB, and a 150 MiB upload may grow the
+// server's memory by at most 60 MiB.
+const (
+	uploadLimitMiB   = 200
+	bigUploadBytes   = 150 << 20
+	uploadMaxGrowth  = 60 << 20
+	uploadLimitBytes = uploadLimitMiB << 20
+)
+
+func testUpload(harness *test_case_harness.TestCaseHarness) error {
+	dataDir := tempDir(harness)
+	dbURL, err := prepareDatabase(harness, false)
+	if err != nil {
+		return err
+	}
+	s, err := jobServer(harness, dataDir, map[string]string{"FRAMEWISE_MAX_UPLOAD_MB": fmt.Sprint(uploadLimitMiB), "DATABASE_URL": dbURL})
 	if err != nil {
 		return err
 	}
@@ -32,22 +59,15 @@ func testServeHealth(harness *test_case_harness.TestCaseHarness) error {
 		return fmt.Errorf(`expected {"status": "ok"}, got %s`, truncate(string(r.raw)))
 	}
 	harness.Logger.Successf(`✓ 200 {"status": "ok"}`)
-	return nil
-}
 
-func testUpload(harness *test_case_harness.TestCaseHarness) error {
-	s, err := startServer(harness, tempDir(harness), nil)
-	if err != nil {
-		return err
-	}
 	type upload struct {
 		id, filename string
-		size         int
+		size         int64
 	}
 	var uploads []upload
-	for _, c := range []clip{clipSquare, clipBig} {
-		filename := fmt.Sprintf("%s-%s.avi", c.name, random.RandomWord())
-		r, err := s.upload(filename, c.bytes(), nil)
+	for _, sc := range []scene{sceneStreet, scenePoison} {
+		filename := fmt.Sprintf("%s-%s.AVI", sc.name, random.RandomWord())
+		r, err := s.upload(filename, sc.bytes(), nil)
 		if err != nil {
 			return err
 		}
@@ -58,11 +78,11 @@ func testUpload(harness *test_case_harness.TestCaseHarness) error {
 		if err != nil {
 			return err
 		}
-		if err := expectVideo(r.object, filename, len(c.bytes())); err != nil {
+		if err := expectVideo(r.object, filename, int64(len(sc.bytes()))); err != nil {
 			return err
 		}
 		harness.Logger.Successf("✓ 201, video_id %s", id)
-		uploads = append(uploads, upload{id, filename, len(c.bytes())})
+		uploads = append(uploads, upload{id, filename, int64(len(sc.bytes()))})
 	}
 	if uploads[0].id == uploads[1].id {
 		return fmt.Errorf("expected every upload to get its own video_id, got %s twice", uploads[0].id)
@@ -83,7 +103,7 @@ func testUpload(harness *test_case_harness.TestCaseHarness) error {
 		}
 		harness.Logger.Successf("✓ 200, %s, %d bytes", u.filename, u.size)
 	}
-	r, err := s.get("/videos/"+randomID(), nil)
+	r, err = s.get("/videos/"+randomID(), nil)
 	if err != nil {
 		return err
 	}
@@ -91,56 +111,80 @@ func testUpload(harness *test_case_harness.TestCaseHarness) error {
 		return err
 	}
 	harness.Logger.Successf("✓ 404 for an unknown id")
-	return nil
-}
 
-func expectVideo(object map[string]any, filename string, size int) error {
-	if object["filename"] != filename {
-		return fmt.Errorf("expected filename %q, got %v", filename, object["filename"])
-	}
-	got, err := intField(object, "size_bytes")
-	if err != nil {
-		return err
-	}
-	if got != int64(size) {
-		return fmt.Errorf("expected size_bytes %d, got %d", size, got)
-	}
-	return nil
-}
-
-func testJob(harness *test_case_harness.TestCaseHarness) error {
-	s, err := startServer(harness, tempDir(harness), nil)
-	if err != nil {
-		return err
-	}
-	for _, run := range []struct {
-		c        clip
-		detector string
-	}{{clipSquare, ""}, {clipTwoMoves, "default"}} {
-		videoID, err := s.uploadClip(run.c.name+".avi", run.c.bytes())
+	word := random.RandomWord()
+	for _, name := range []string{word + ".txt", word} {
+		r, err := s.upload(name, sceneStreet.bytes(), nil)
 		if err != nil {
 			return err
 		}
-		jobID, _, err := s.submitJob(videoID, run.detector)
-		if err != nil {
-			return err
+		if err := expectStatus(r, 415); err != nil {
+			return fmt.Errorf("%q: %v", name, err)
 		}
-		job, err := s.expectJobDone(jobID, run.c)
-		if err != nil {
-			return err
-		}
-		if job["video_id"] != videoID || job["detector"] != "default" || job["id"] != jobID {
-			return fmt.Errorf(`expected the job to have "id" %q, "video_id" %q and "detector" "default", got %v, %v and %v`, jobID, videoID, job["id"], job["video_id"], job["detector"])
-		}
+		harness.Logger.Successf("✓ 415 for %q", name)
 	}
-	return nil
-}
 
-func testJobErrors(harness *test_case_harness.TestCaseHarness) error {
-	s, err := startServer(harness, tempDir(harness), nil)
+	before := groupRSS(s.p.pid)
+	sampler := sampleRSS(s.p.pid)
+	r, err = s.uploadStream(word+".mp4", bigUploadBytes)
+	peak, _ := sampler.finish()
 	if err != nil {
 		return err
 	}
+	if err := expectStatus(r, 201); err != nil {
+		return fmt.Errorf("an upload under the limit: %v", err)
+	}
+	if growth := peak - before; growth > uploadMaxGrowth {
+		return fmt.Errorf("expected a %.0f MiB upload to grow your server's memory by at most %.0f MiB, it grew by %.0f MiB. Write the upload to disk in chunks as it arrives", mib(bigUploadBytes), mib(uploadMaxGrowth), mib(growth))
+	} else {
+		harness.Logger.Successf("✓ 201, memory grew by %.0f MiB (limit %.0f MiB)", mib(growth), mib(uploadMaxGrowth))
+	}
+
+	r, err = s.uploadStream(word+".mkv", uploadLimitBytes+1)
+	if err != nil {
+		return err
+	}
+	if err := expectStatus(r, 413); err != nil {
+		return fmt.Errorf("an upload 1 byte over the %d MiB limit: %v", uploadLimitMiB, err)
+	}
+	harness.Logger.Successf("✓ 413 for 1 byte over the limit")
+	var tooBig []string
+	filepath.WalkDir(dataDir, func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			if info, err := d.Info(); err == nil && info.Size() > uploadLimitBytes {
+				tooBig = append(tooBig, fmt.Sprintf("%s (%d bytes)", path, info.Size()))
+			}
+		}
+		return nil
+	})
+	if len(tooBig) > 0 {
+		return fmt.Errorf("expected nothing over the limit to be kept in --data-dir, found %v", tooBig)
+	}
+	harness.Logger.Successf("✓ nothing over the limit is kept in --data-dir")
+	return nil
+}
+
+// jobServer starts a server with the tester's profiles and extra env.
+func jobServer(harness *test_case_harness.TestCaseHarness, dataDir string, env map[string]string) (*server, error) {
+	all := map[string]string{"FRAMEWISE_PROFILES": writeProfiles(harness, testProfilesYAML)}
+	for k, v := range env {
+		if v != "" {
+			all[k] = v
+		}
+	}
+	return startServer(harness, dataDir, all)
+}
+
+func testJobs(harness *test_case_harness.TestCaseHarness) error {
+	dbURL, err := prepareDatabase(harness, false)
+	if err != nil {
+		return err
+	}
+	sv, err := startService(harness, tempDir(harness), serviceEnv(harness, dbURL, nil), 1, true)
+	if err != nil {
+		return err
+	}
+	s := sv.server
 	check := func(r response, err error, want int, what string) error {
 		if err != nil {
 			return err
@@ -148,30 +192,43 @@ func testJobErrors(harness *test_case_harness.TestCaseHarness) error {
 		if err := expectStatus(r, want); err != nil {
 			return fmt.Errorf("%s: %v", what, err)
 		}
-		harness.Logger.Successf("✓ %d", want)
+		harness.Logger.Successf("✓ %d for %s", want, what)
 		return nil
 	}
-	r, err := s.get("/jobs/"+randomID(), nil)
-	if err := check(r, err, 404, "unknown job"); err != nil {
-		return err
-	}
-	r, err = s.postJSON("/jobs", map[string]string{"video_id": randomID()})
-	if err := check(r, err, 404, "unknown video"); err != nil {
-		return err
-	}
-	r, err = s.postJSON("/jobs", map[string]string{"detector": "default"})
-	if err := check(r, err, 422, "no video_id"); err != nil {
-		return err
-	}
-	videoID, err := s.uploadClip("square.avi", clipSquare.bytes())
+	videoID, err := s.uploadClip("street.avi", sceneStreet.bytes())
 	if err != nil {
 		return err
 	}
-	r, err = s.postJSON("/jobs", map[string]string{"video_id": videoID, "detector": random.RandomWord()})
-	if err := check(r, err, 422, "unknown detector"); err != nil {
-		return err
+	for _, run := range []struct{ requested, name string }{{"", "default"}, {"people", "people"}} {
+		jobID, _, err := s.submitJob(videoID, run.requested)
+		if err != nil {
+			return err
+		}
+		job, err := s.expectJobDone(jobID, sceneStreet, testProfiles[run.name])
+		if err != nil {
+			return err
+		}
+		if job["video_id"] != videoID || job["profile"] != run.name || job["id"] != jobID {
+			return fmt.Errorf(`expected the job to have "id" %q, "video_id" %q and "profile" %q, got %v, %v and %v`, jobID, videoID, run.name, job["id"], job["video_id"], job["profile"])
+		}
 	}
 
+	r, err := s.get("/jobs/"+randomID(), nil)
+	if err := check(r, err, 404, "an unknown job"); err != nil {
+		return err
+	}
+	r, err = s.postJSON("/jobs", map[string]string{"video_id": randomID()})
+	if err := check(r, err, 404, "an unknown video"); err != nil {
+		return err
+	}
+	r, err = s.postJSON("/jobs", map[string]string{"profile": "default"})
+	if err := check(r, err, 422, "no video_id"); err != nil {
+		return err
+	}
+	r, err = s.postJSON("/jobs", map[string]string{"video_id": videoID, "profile": random.RandomWord()})
+	if err := check(r, err, 422, "an unknown profile"); err != nil {
+		return err
+	}
 	garbage := bytes.Repeat([]byte("definitely not a video\n"), 100)
 	badID, err := s.uploadClip(random.RandomWord()+".mp4", garbage)
 	if err != nil {
@@ -192,22 +249,22 @@ func testJobErrors(harness *test_case_harness.TestCaseHarness) error {
 		return fmt.Errorf("expected a FAILED job to have a non-empty \"error\", got %v", job["error"])
 	}
 	harness.Logger.Successf("✓ FAILED: %v", job["error"])
-	return s.runJob(clipSquare)
+
+	return expectResponsive(harness, s, 3)
 }
 
-func testBackground(harness *test_case_harness.TestCaseHarness) error {
-	s, err := startServer(harness, tempDir(harness), nil)
-	if err != nil {
-		return err
-	}
-	videoID, err := s.uploadClip("long.avi", clipLong.bytes())
+// expectResponsive submits n jobs on the long clip: each POST must answer
+// within 2 s, before the analysis is done, and /health within 1 s meanwhile.
+func expectResponsive(harness *test_case_harness.TestCaseHarness, s *server, n int) error {
+	longID, err := s.uploadClip("long_street.avi", sceneLong.bytes())
 	if err != nil {
 		return err
 	}
 	var jobs []string
-	for i := 0; i < 3; i++ {
-		harness.Logger.Infof("POST /jobs {\"video_id\": %q}", videoID)
-		r, err := s.send("POST", "/jobs", "application/json", []byte(fmt.Sprintf(`{"video_id": %q}`, videoID)), nil)
+	for i := 0; i < n; i++ {
+		body := fmt.Sprintf(`{"video_id": %q}`, longID)
+		harness.Logger.Infof("POST /jobs %s", body)
+		r, err := s.send("POST", "/jobs", "application/json", []byte(body), nil)
 		if err != nil {
 			return err
 		}
@@ -240,32 +297,49 @@ func testBackground(harness *test_case_harness.TestCaseHarness) error {
 	}
 	harness.Logger.Successf("✓ 200 in %.2f s while jobs run", r.took.Seconds())
 	for _, id := range jobs {
-		if _, err := s.expectJobDone(id, clipLong); err != nil {
+		if _, err := s.expectJobDone(id, sceneLong, defaultProfile); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+func countRows(dbURL, table string) (int64, error) {
+	rows, err := queryRows(dbURL, "SELECT count(*) FROM "+table)
+	if err != nil {
+		return 0, fmt.Errorf("couldn't count %s: %v", table, err)
+	}
+	return rows[0][0].(int64), nil
+}
+
 func testRestart(harness *test_case_harness.TestCaseHarness) error {
+	dbURL, err := prepareDatabase(harness, true)
+	if err != nil {
+		return err
+	}
+	if err := expectTables(harness, dbURL, "queue.jobs", "results.videos"); err != nil {
+		return err
+	}
 	dataDir := tempDir(harness)
-	s, err := startServer(harness, dataDir, nil)
+	env := serviceEnv(harness, dbURL, nil)
+	sv, err := startService(harness, dataDir, env, 1, true)
 	if err != nil {
 		return err
 	}
-	squareID, err := s.uploadClip("square.avi", clipSquare.bytes())
+	s := sv.server
+	streetID, err := s.uploadClip("street.avi", sceneStreet.bytes())
 	if err != nil {
 		return err
 	}
-	doneID, _, err := s.submitJob(squareID, "")
+	doneID, _, err := s.submitJob(streetID, "people")
 	if err != nil {
 		return err
 	}
-	done, err := s.expectJobDone(doneID, clipSquare)
+	done, err := s.expectJobDone(doneID, sceneStreet, testProfiles["people"])
 	if err != nil {
 		return err
 	}
-	longID, err := s.uploadClip("long.avi", clipLong.bytes())
+	longID, err := s.uploadClip("long_street.avi", sceneLong.bytes())
 	if err != nil {
 		return err
 	}
@@ -279,12 +353,23 @@ func testRestart(harness *test_case_harness.TestCaseHarness) error {
 	}
 	s.stop()
 
-	harness.Logger.Infof("Starting the server again on the same --data-dir")
-	s, err = startServer(harness, dataDir, nil)
+	for table, want := range map[string]int64{"results.videos": 2, "queue.jobs": 3} {
+		n, err := countRows(dbURL, table)
+		if err != nil {
+			return err
+		}
+		if n != want {
+			return fmt.Errorf("expected %d rows in %s after %d uploads and jobs, found %d. Keep videos and jobs in Postgres", want, table, want, n)
+		}
+	}
+	harness.Logger.Successf("✓ results.videos has 2 rows, queue.jobs 3")
+
+	harness.Logger.Infof("Starting the server again on the same database and --data-dir")
+	s, err = startServer(harness, dataDir, env)
 	if err != nil {
 		return err
 	}
-	for _, id := range []string{squareID, longID} {
+	for _, id := range []string{streetID, longID} {
 		r, err := s.get("/videos/"+id, nil)
 		if err != nil {
 			return err
@@ -301,141 +386,19 @@ func testRestart(harness *test_case_harness.TestCaseHarness) error {
 	if err := expectStatus(r, 200); err != nil {
 		return fmt.Errorf("a job finished before the restart: %v", err)
 	}
-	before, _ := segmentsField(done, "segments")
-	after, err := segmentsField(r.object, "segments")
+	before, _ := labelsField(done, "labels")
+	after, err := labelsField(r.object, "labels")
 	if err != nil {
 		return err
 	}
-	if r.object["status"] != "DONE" || compareSegments(after, before, 1000) != nil {
-		return fmt.Errorf("expected the finished job unchanged (DONE, %s), got %v, %s", formatSegments(before), r.object["status"], formatSegments(after))
+	if r.object["status"] != "DONE" || compareLabels(after, before, 1000) != nil {
+		return fmt.Errorf("expected the finished job unchanged (DONE, %s), got %v, %s", formatLabels(before), r.object["status"], formatLabels(after))
 	}
-	harness.Logger.Successf("✓ DONE, %s, as before", formatSegments(after))
+	harness.Logger.Successf("✓ DONE, %s, as before", formatLabels(after))
 	for _, id := range pending {
-		if _, err := s.expectJobDone(id, clipLong); err != nil {
+		if _, err := s.expectJobDone(id, sceneLong, defaultProfile); err != nil {
 			return fmt.Errorf("a job submitted before the restart: %v", err)
 		}
 	}
-	return s.runJob(clipTwoMoves)
-}
-
-func testAPIKey(harness *test_case_harness.TestCaseHarness) error {
-	key := fmt.Sprintf("%s-%s-%d", random.RandomWord(), random.RandomWord(), random.RandomInt(1000, 9999))
-	s, err := startServer(harness, tempDir(harness), map[string]string{"FRAMEWISE_API_KEY": key})
-	if err != nil {
-		return err
-	}
-	r, err := s.get("/health", nil)
-	if err != nil {
-		return err
-	}
-	if err := expectStatus(r, 200); err != nil {
-		return fmt.Errorf("GET /health needs no key: %v", err)
-	}
-	harness.Logger.Successf("✓ 200 without a key")
-
-	jobPath := "/jobs/" + randomID()
-	for _, attempt := range []struct{ what, value string }{
-		{"no key", ""},
-		{"a wrong key", random.RandomWord()},
-		{"half the key", key[:len(key)/2]},
-		{"the key plus one character", key + "x"},
-	} {
-		harness.Logger.Infof("GET %s with %s", jobPath, attempt.what)
-		headers := map[string]string{}
-		if attempt.value != "" {
-			headers["X-API-Key"] = attempt.value
-		}
-		r, err := s.send("GET", jobPath, "", nil, headers)
-		if err != nil {
-			return err
-		}
-		if err := expectStatus(r, 401); err != nil {
-			return fmt.Errorf("with %s: %v", attempt.what, err)
-		}
-		harness.Logger.Successf("✓ 401")
-	}
-	harness.Logger.Infof("GET %s with the right key", jobPath)
-	r, err = s.send("GET", jobPath, "", nil, map[string]string{"X-API-Key": key})
-	if err != nil {
-		return err
-	}
-	if err := expectStatus(r, 404); err != nil {
-		return fmt.Errorf("with the right key: %v", err)
-	}
-	harness.Logger.Successf("✓ 404")
-
-	r, err = s.upload("square.avi", clipSquare.bytes(), nil)
-	if err != nil {
-		return err
-	}
-	if err := expectStatus(r, 401); err != nil {
-		return fmt.Errorf("an upload without a key: %v", err)
-	}
-	harness.Logger.Successf("✓ 401")
-
-	harness.Logger.Infof("Running a job, sending the key")
-	s.apiKey = key
-	return s.runJob(clipSquare)
-}
-
-func testUploadLimits(harness *test_case_harness.TestCaseHarness) error {
-	dataDir := tempDir(harness)
-	s, err := startServer(harness, dataDir, map[string]string{"FRAMEWISE_MAX_UPLOAD_MB": "1"})
-	if err != nil {
-		return err
-	}
-	const mib = 1024 * 1024
-	noise := func(n int) []byte {
-		b := make([]byte, n)
-		rand.Read(b)
-		return b
-	}
-	word := random.RandomWord()
-	videoName := word + ".AVI"
-	cases := []struct {
-		filename string
-		data     []byte
-		want     int
-	}{
-		{word + ".txt", []byte("not a video\n"), 415},
-		{word, clipSquare.bytes(), 415},
-		{word + ".mp4", noise(mib), 201},
-		{word + ".mp4", noise(mib + 1), 413},
-		{word + ".mkv", noise(5 * mib), 413},
-		{videoName, clipSquare.bytes(), 201},
-	}
-	var videoID string
-	for _, tc := range cases {
-		r, err := s.upload(tc.filename, tc.data, nil)
-		if err != nil {
-			return err
-		}
-		if err := expectStatus(r, tc.want); err != nil {
-			return fmt.Errorf("%s (%d bytes): %v", tc.filename, len(tc.data), err)
-		}
-		harness.Logger.Successf("✓ %d", tc.want)
-		if tc.filename == videoName {
-			videoID, _ = r.object["video_id"].(string)
-		}
-	}
-	var tooBig []string
-	filepath.WalkDir(dataDir, func(path string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() {
-			if info, err := d.Info(); err == nil && info.Size() > mib {
-				tooBig = append(tooBig, fmt.Sprintf("%s (%d bytes)", path, info.Size()))
-			}
-		}
-		return nil
-	})
-	if len(tooBig) > 0 {
-		return fmt.Errorf("expected nothing over the limit to be stored, found %v", tooBig)
-	}
-	harness.Logger.Successf("✓ nothing over the limit is stored in --data-dir")
-
-	jobID, _, err := s.submitJob(videoID, "")
-	if err != nil {
-		return err
-	}
-	_, err = s.expectJobDone(jobID, clipSquare)
-	return err
+	return s.runJob(sceneStreet)
 }
