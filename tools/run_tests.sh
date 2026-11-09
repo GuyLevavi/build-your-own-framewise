@@ -4,10 +4,14 @@
 #   tools/run_tests.sh CODE_DIR [STAGE_SLUG] [--only]
 #
 # Runs every stage from the first up to STAGE_SLUG (default: all), or just STAGE_SLUG with --only.
-# The program runs in a container built from dockerfiles/, with CODE_DIR mounted at /app, so
-# nothing but podman (or docker) is needed on the host.
+# By default the program runs in a container built from dockerfiles/, with CODE_DIR mounted at
+# /app, so nothing but podman (or docker) is needed on the host. With FRAMEWISE_RUNNER=native it
+# runs on the host with uv instead (the twentyx pod, or any machine with uv and Python 3.12).
 #
 # Environment:
+#   FRAMEWISE_RUNNER  container (default) or native
+#   FRAMEWISE_TEST_DATABASE_URL  an existing Postgres for the database stages; the tester
+#                creates and drops its own databases there. Unset: the tester starts its own.
 #   TESTER_DIR   directory holding `tester` and `test.sh` (default: ../framewise-tester/dist,
 #                built with `make build` there if missing)
 #   CPUS         CPU limit for the container (default 0.5, as on CodeCrafters)
@@ -18,7 +22,6 @@ course_dir="$(cd "$(dirname "$0")/.." && pwd)"
 code_dir="$(cd "${1:?usage: tools/run_tests.sh CODE_DIR [STAGE_SLUG] [--only]}" && pwd)"
 until="${2:-}"
 only="${3:-}"
-engine="$(command -v podman || command -v docker)"
 export CONTAINERS_REGISTRIES_CONF="${CONTAINERS_REGISTRIES_CONF:-$course_dir/tools/registries.conf}"
 
 tester_dir="${TESTER_DIR:-$course_dir/../framewise-tester/dist}"
@@ -60,13 +63,29 @@ if [[ -n "$until" && -z "$found" ]]; then
   exit 2
 fi
 
+if [[ "${FRAMEWISE_RUNNER:-container}" == native ]]; then
+  # One virtualenv per dependency set, outside CODE_DIR, so solutions stay clean.
+  deps_hash="$(cat "$code_dir/pyproject.toml" "$code_dir/uv.lock" | sha256sum | cut -c1-12)"
+  export UV_PROJECT_ENVIRONMENT="${XDG_CACHE_HOME:-$HOME/.cache}/framewise/venv-$deps_hash"
+  cd "$code_dir"
+  exec env \
+    TESTER_DIR="$tester_dir" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    CODECRAFTERS_REPOSITORY_DIR="$code_dir" \
+    CODECRAFTERS_TEST_CASES_JSON="$json" \
+    CODECRAFTERS_RANDOM_SEED="${CODECRAFTERS_RANDOM_SEED:-}" \
+    "$tester_dir/tester"
+fi
+
+engine="$(command -v podman || command -v docker)"
+
 # The image holds only the dependencies, keyed by the dependency files, so code changes need no rebuild.
 dockerfile="$(ls "$course_dir"/dockerfiles/python-*.Dockerfile | sort -V | tail -1)"
-deps_hash="$(cat "$dockerfile" "$code_dir/pyproject.toml" "$code_dir/uv.lock" | sha256sum | cut -c1-12)"
+deps_hash="$(cat "$dockerfile" "$code_dir/pyproject.toml" "$code_dir/uv.lock" "$code_dir"/vendor/* | sha256sum | cut -c1-12)"
 image="framewise-deps:$deps_hash"
 if ! "$engine" image exists "$image" 2>/dev/null; then
   context="$(mktemp -d)"
-  cp "$code_dir/pyproject.toml" "$code_dir/uv.lock" "$context/"
+  cp -r "$code_dir/pyproject.toml" "$code_dir/uv.lock" "$code_dir/vendor" "$context/"
   [[ -f "$code_dir/.python-version" ]] && cp "$code_dir/.python-version" "$context/"
   echo "Building $image (dependencies only; cached until pyproject.toml or uv.lock change) ..."
   "$engine" build -q -t "$image" -f "$dockerfile" "$context" >/dev/null
@@ -82,5 +101,7 @@ exec "$engine" run --rm \
   -e CODECRAFTERS_REPOSITORY_DIR=/app \
   -e CODECRAFTERS_TEST_CASES_JSON="$json" \
   -e CODECRAFTERS_RANDOM_SEED="${CODECRAFTERS_RANDOM_SEED:-}" \
+  -e FRAMEWISE_TEST_DATABASE_URL="${FRAMEWISE_TEST_DATABASE_URL:-}" \
+  --network host \
   -w /app \
   "$image" /var/opt/tester/test.sh

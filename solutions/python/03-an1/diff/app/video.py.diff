@@ -1,0 +1,25 @@
+--- a/app/video.py
++++ b/app/video.py
+@@ -6,6 +6,7 @@
+ from pathlib import Path
+ 
+ import cv2
++import numpy as np
+ 
+ from app.errors import FramewiseError
+ 
+@@ -57,3 +58,14 @@
+ def probe(path: Path) -> VideoInfo:
+     with open_video(path) as (_, info):
+         return info
++
++
++def frames(capture: cv2.VideoCapture, every: int) -> list[tuple[int, np.ndarray]]:
++    """Every `every`-th frame with its index."""
++    decoded = []
++    while True:
++        ok, frame = capture.read()
++        if not ok:
++            break
++        decoded.append(frame)
++    return [(index, decoded[index]) for index in range(0, len(decoded), every)]

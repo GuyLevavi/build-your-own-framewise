@@ -1,0 +1,58 @@
+--- a/app/server.py
++++ b/app/server.py
+@@ -5,8 +5,11 @@
+ from pathlib import Path
+ 
+ from fastapi import FastAPI, HTTPException, UploadFile
++from pydantic import BaseModel
+ 
++from app.profiles import Profile
+ from app.store import Store, Video, new_id
++from app.worker import Worker
+ 
+ VIDEO_SUFFIXES = {".avi", ".mp4", ".mkv", ".mov"}
+ CHUNK = 1 << 20
+@@ -22,10 +25,20 @@
+         return cls(data_dir, int(os.environ.get("FRAMEWISE_MAX_UPLOAD_MB", "1024")) * 1024 * 1024)
+ 
+ 
+-def create_app(settings: Settings, store: Store) -> FastAPI:
++class JobRequest(BaseModel):
++    video_id: str
++    profile: str = "default"
++
++
++def create_app(settings: Settings, store: Store, profiles: dict[str, Profile]) -> FastAPI:
+     app = FastAPI(title="Framewise")
+     videos_dir = settings.data_dir / "videos"
+     videos_dir.mkdir(parents=True, exist_ok=True)
++    worker = Worker(store, profiles)
++
++    @app.on_event("startup")
++    def start_worker() -> None:
++        worker.start()
+ 
+     @app.get("/health")
+     def health() -> dict[str, str]:
+@@ -61,4 +74,21 @@
+             raise HTTPException(404, "no such video")
+         return video.public()
+ 
++    @app.post("/jobs", status_code=202)
++    def submit(request: JobRequest) -> dict:
++        if store.video(request.video_id) is None:
++            raise HTTPException(404, "no such video")
++        if request.profile not in profiles:
++            raise HTTPException(422, f"unknown profile {request.profile!r}")
++        job = store.add_job(request.video_id, request.profile)
++        worker.submit(job.id)
++        return job.public()
++
++    @app.get("/jobs/{job_id}")
++    def get_job(job_id: str) -> dict:
++        job = store.job(job_id)
++        if job is None:
++            raise HTTPException(404, "no such job")
++        return job.public()
++
+     return app

@@ -1,4 +1,5 @@
 tools/.course-sdk/
+tools/.verify/
 __pycache__/
 *.pyc
 .venv/

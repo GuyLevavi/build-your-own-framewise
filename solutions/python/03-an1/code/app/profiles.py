@@ -1,0 +1,15 @@
+"""How to analyze a video: which frames, which labels, how long a gap may be."""
+
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+Label = Literal["person", "car", "bicycle"]
+
+
+class Profile(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    every: int = Field(default=1, ge=1)
+    max_gap_s: float = Field(default=0.5, ge=0)
+    labels: tuple[Label, ...] = Field(default=("person", "car", "bicycle"), min_length=1)

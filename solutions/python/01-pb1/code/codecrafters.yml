@@ -6,5 +6,5 @@ debug: false
 
 # The Python version used to run your code.
 #
-# Available versions: python-3.13
-buildpack: python-3.13
+# Available versions: python-3.12
+buildpack: python-3.12

@@ -5,7 +5,8 @@ def main() -> None:
     # You can use print statements as follows for debugging, they'll be visible when running tests.
     print("Logs from your program will appear here!", file=sys.stderr)
 
-    # Uncomment the code below to pass the first stage
+    # Uncomment the code below to start on the first stage. It prints the frame size;
+    # the stage also wants the frame rate, the frame count and the duration.
     #
     # import json
     #

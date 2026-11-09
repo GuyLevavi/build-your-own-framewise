@@ -1,0 +1,21 @@
+--- a/app/main.py
++++ b/app/main.py
+@@ -1,6 +1,7 @@
+ import argparse
+ import json
+ import logging
++import os
+ import sys
+ from pathlib import Path
+ 
+@@ -30,7 +31,9 @@
+     from app.server import Settings, create_app
+     from app.store import Store
+ 
+-    app = create_app(Settings.from_env(args.data_dir), Store())
++    profiles_path = Path(os.environ.get("FRAMEWISE_PROFILES", "profiles.yaml"))
++    profiles = load_profiles(profiles_path)
++    app = create_app(Settings.from_env(args.data_dir), Store(), profiles)
+     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+ 
+ 
