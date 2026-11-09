@@ -164,13 +164,6 @@ func aviFrames(t *testing.T, data []byte) [][]byte {
 	return frames
 }
 
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
-
 // FRAMEWISE_DUMP_SCENES=<dir> go test -run TestDumpScenes ./internal writes
 // every scene to dir, so the course repo can check fwdetect against them.
 func TestDumpScenes(t *testing.T) {

@@ -264,3 +264,10 @@ func (s scene) write(dir string) string {
 }
 
 func (s scene) duration() float64 { return float64(s.frames) / float64(s.fps) }
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
