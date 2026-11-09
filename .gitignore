@@ -1,3 +1,6 @@
 tools/.course-sdk/
 __pycache__/
 *.pyc
+.venv/
+packages/fwdetect/dist/
+packages/fwdetect/uv.lock
