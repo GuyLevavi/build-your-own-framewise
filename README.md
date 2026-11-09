@@ -70,6 +70,7 @@ events SQL (10). The full assignment still covers them.
 | `stage_descriptions/` | one Markdown file per stage: task, exact I/O, how it's tested, hints |
 | `starter_templates/` | the source of the starter; `compiled_starters/python` is generated from it |
 | `solutions/python/NN-slug/code` | reference solution for each stage (passes it and all earlier ones) |
+| `packages/fwdetect/` | the detector shipped to learners as a wheel (the redesigned course's black box) |
 | `dockerfiles/python-3.13.Dockerfile` | the image programs run in |
 | `tools/run_tests.sh` | run the tester against one directory |
 | `tools/verify_course.sh` | prove every stage: solution N passes 1..N, solution N-1 fails stage N |

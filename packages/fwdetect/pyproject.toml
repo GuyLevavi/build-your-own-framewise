@@ -1,0 +1,16 @@
+[project]
+name = "fwdetect"
+version = "0.1.0"
+description = "The object detector the Framewise course ships as a black box"
+requires-python = ">=3.12"
+dependencies = ["numpy>=1.26"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fwdetect"]
+
+[tool.ruff]
+line-length = 120
