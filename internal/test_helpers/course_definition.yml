@@ -120,7 +120,7 @@ stages:
     name: "Retries without duplicates"
     difficulty: medium
     marketing_md: |-
-      In this stage, you'll make a retried job store its results exactly once.
+      In this stage, you'll make a retried or rerun job store its results exactly once, detections and episodes alike.
 
   - slug: "pf1"
     name: "Downscale"
@@ -140,11 +140,30 @@ stages:
     marketing_md: |-
       In this stage, you'll keep a worker alive and honest when one of its pool processes crashes.
 
+  # Call a model server
+  - slug: "md1"
+    name: "Call a model server"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll run the detector on a model server that speaks Triton's HTTP protocol, chosen by a profile setting.
+
+  - slug: "md2"
+    name: "Batch and pipeline"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll batch frames and keep several requests in flight to hit a frame rate, without reading ahead past a memory budget.
+
+  - slug: "md3"
+    name: "When the model server fails"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll set timeouts, retry what's worth retrying, and fail a job clearly when the model server can't help.
+
   - slug: "op1"
     name: "Metrics and logs"
     difficulty: medium
     marketing_md: |-
-      In this stage, you'll expose Prometheus metrics and write structured logs a log platform can search.
+      In this stage, you'll expose Prometheus metrics, report each job's frames per second, and write structured logs a log platform can search.
 
   - slug: "op2"
     name: "Live progress"

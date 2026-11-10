@@ -251,7 +251,11 @@ func formatEvents(events []event) string {
 }
 
 func (s *server) expectEvents(jobID string, sc scene, removed map[int]bool) error {
-	r, err := s.get("/jobs/"+jobID+"/events", nil)
+	return s.expectEventsAt("/jobs/"+jobID+"/events", sc, removed)
+}
+
+func (s *server) expectEventsAt(path string, sc scene, removed map[int]bool) error {
+	r, err := s.get(path, nil)
 	if err != nil {
 		return err
 	}
@@ -398,5 +402,49 @@ func testRetries(harness *test_case_harness.TestCaseHarness) error {
 		return fmt.Errorf("expected exactly %d rows in results.detections for the job after its retry, found %d. The first attempt's rows must not be counted twice", want, n)
 	}
 	harness.Logger.Successf("✓ exactly %d rows after the retry", n)
-	return sv.expectEvents(jobID, sceneLong, nil)
+	if err := sv.expectEvents(jobID, sceneLong, nil); err != nil {
+		return err
+	}
+	return expectEpisodes(sv, dbURL)
+}
+
+// expectEpisodes runs the street clip twice and checks the episodes stored for the video.
+func expectEpisodes(sv *service, dbURL string) error {
+	streetID, err := sv.uploadClip("street.avi", sceneStreet.bytes())
+	if err != nil {
+		return err
+	}
+	want := len(expectedEvents(sceneStreet, nil))
+	for run := 1; run <= 2; run++ {
+		if run == 2 {
+			sv.harness.Logger.Infof("Running the same video again")
+		}
+		jobID, _, err := sv.submitJob(streetID, "")
+		if err != nil {
+			return err
+		}
+		if _, err := sv.expectJobDone(jobID, sceneStreet, defaultProfile); err != nil {
+			return err
+		}
+		if err := sv.expectEventsAt("/videos/"+streetID+"/events", sceneStreet, nil); err != nil {
+			return fmt.Errorf("the video's stored episodes: %v", err)
+		}
+		rows, err := queryRows(dbURL, "SELECT count(*) FROM results.episodes WHERE video_id = $1", streetID)
+		if err != nil {
+			return fmt.Errorf("couldn't count the video's rows in results.episodes (video_id, rule, start_s, end_s): %v", err)
+		}
+		if n := rows[0][0].(int64); n != int64(want) {
+			return fmt.Errorf("expected %d rows in results.episodes for the video after %d runs, found %d. An episode's key comes from what it is (video, rule, start), so a rerun finds the row already there", want, run, n)
+		}
+		sv.harness.Logger.Successf("✓ %d rows in results.episodes for the video", want)
+	}
+	r, err := sv.get("/videos/"+randomID()+"/events", nil)
+	if err != nil {
+		return err
+	}
+	if err := expectStatus(r, 404); err != nil {
+		return fmt.Errorf("events of an unknown video: %v", err)
+	}
+	sv.harness.Logger.Successf("✓ 404 for an unknown video")
+	return nil
 }

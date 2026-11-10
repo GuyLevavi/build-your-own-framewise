@@ -79,15 +79,30 @@ func testMetrics(harness *test_case_harness.TestCaseHarness) error {
 		return err
 	}
 	var jobs []string
+	frames := sampledFrames(sceneStreet, defaultProfile)
 	for i := 0; i < 2; i++ {
+		submitted := time.Now()
 		id, _, err := sv.submitJob(videoID, "")
 		if err != nil {
 			return err
 		}
-		if _, err := sv.expectJobDone(id, sceneStreet, defaultProfile); err != nil {
+		job, err := sv.expectJobDone(id, sceneStreet, defaultProfile)
+		if err != nil {
 			return err
 		}
+		elapsed := time.Since(submitted).Seconds()
 		jobs = append(jobs, id)
+		if n, err := intField(job, "frames"); err != nil || n != int64(frames) {
+			return fmt.Errorf(`expected GET /jobs/%s to have "frames": %d (the frames the detector analyzed), got %v`, id, frames, job["frames"])
+		}
+		fps, err := floatField(job, "fps")
+		if err != nil {
+			return fmt.Errorf("GET /jobs/%s: %v (frames analyzed per second of the job's run)", id, err)
+		}
+		if fps <= 0 || float64(frames)/fps > elapsed+1 {
+			return fmt.Errorf(`expected "fps" to be the frames analyzed per second while the job ran: %d frames took at most %.1f s, so at least %.0f, got %v`, frames, elapsed, float64(frames)/(elapsed+1), fps)
+		}
+		harness.Logger.Successf("✓ %d frames at %.0f frames/s", frames, fps)
 	}
 	text, err := sv.metrics()
 	if err != nil {
@@ -104,6 +119,16 @@ func testMetrics(harness *test_case_harness.TestCaseHarness) error {
 		return fmt.Errorf(`expected framewise_jobs{status="DONE"} 2 in GET /metrics (the jobs in the database, whichever process ran them), got %v`, byStatus)
 	}
 	harness.Logger.Successf(`✓ framewise_jobs{status="DONE"} 2`)
+	analyzed := -1.0
+	for _, s := range samples {
+		if s.name == "framewise_frames_analyzed_total" {
+			analyzed = s.value
+		}
+	}
+	if analyzed != float64(2*frames) {
+		return fmt.Errorf(`expected framewise_frames_analyzed_total %d in GET /metrics (frames analyzed by finished jobs, from the database), got %v`, 2*frames, analyzed)
+	}
+	harness.Logger.Successf("✓ framewise_frames_analyzed_total %d", 2*frames)
 	routed := false
 	for _, s := range samples {
 		if s.name == "framewise_http_request_duration_seconds_count" && strings.Contains(s.labels["route"], "/jobs/{") && s.value > 0 {
@@ -126,7 +151,7 @@ func testMetrics(harness *test_case_harness.TestCaseHarness) error {
 	if !w.exited() {
 		return fmt.Errorf("expected the worker to exit on SIGTERM")
 	}
-	var tagged int
+	var tagged, withFPS int
 	for _, line := range strings.Split(w.stderr(), "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.Contains(line, jobs[0]) {
@@ -143,12 +168,19 @@ func testMetrics(harness *test_case_harness.TestCaseHarness) error {
 		}
 		if entry["job_id"] == jobs[0] {
 			tagged++
+			if _, ok := entry["fps"].(float64); ok {
+				withFPS++
+			}
 		}
 	}
 	if tagged < 2 {
 		return fmt.Errorf(`expected the worker to log at least 2 JSON lines with "job_id": %q on stderr (taking the job, finishing it), found %d`, jobs[0], tagged)
 	}
 	harness.Logger.Successf("✓ %d JSON log lines with the job's id", tagged)
+	if withFPS == 0 {
+		return fmt.Errorf(`expected the line that says the job finished to carry its speed as a number field, "fps", so Splunk can chart it`)
+	}
+	harness.Logger.Successf(`✓ a log line with the job's "fps"`)
 	return nil
 }
 
