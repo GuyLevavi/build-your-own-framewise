@@ -58,12 +58,16 @@ func detectionsField(object map[string]any) ([]storedBox, error) {
 	return result, nil
 }
 
-func sameBox(a, b box) bool {
-	return a.Label == b.Label && abs(a.X-b.X) <= 2 && abs(a.Y-b.Y) <= 2 && abs(a.W-b.W) <= 2 && abs(a.H-b.H) <= 2
+func sameBox(a, b box, tolerance int) bool {
+	return a.Label == b.Label && abs(a.X-b.X) <= tolerance && abs(a.Y-b.Y) <= tolerance && abs(a.W-b.W) <= tolerance && abs(a.H-b.H) <= tolerance
 }
 
 // compareDetections checks got against frames [from, to] of s, in order of time then label.
 func compareDetections(got []storedBox, s scene, from, to int) error {
+	return compareDetectionsWithin(got, s, from, to, 2)
+}
+
+func compareDetectionsWithin(got []storedBox, s scene, from, to, tolerance int) error {
 	var want []storedBox
 	for i := from; i <= to && i < s.frames; i++ {
 		boxes := s.boxesAt(i)
@@ -76,8 +80,8 @@ func compareDetections(got []storedBox, s scene, from, to int) error {
 		return fmt.Errorf("expected %d detections, got %d", len(want), len(got))
 	}
 	for i := range want {
-		if math.Abs(got[i].t-want[i].t) > 1e-3 || !sameBox(got[i].box, want[i].box) {
-			return fmt.Errorf("expected detection %d (sorted by t_s, then label) to be %s, got %s (positions within 2 px)", i, want[i], got[i])
+		if math.Abs(got[i].t-want[i].t) > 1e-3 || !sameBox(got[i].box, want[i].box, tolerance) {
+			return fmt.Errorf("expected detection %d (sorted by t_s, then label) to be %s, got %s (positions within %d px)", i, want[i], got[i], tolerance)
 		}
 	}
 	return nil
