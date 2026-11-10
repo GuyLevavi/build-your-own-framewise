@@ -1,101 +1,121 @@
 # Build your own Framewise
 
-A compact, CodeCrafters-style version of the Framewise ten-week assignment
-(`../framewise/ASSIGNMENTS.md`): 19 small stages, each checked by a black-box tester, that take a
-learner from an empty `main.py` to a hardened video-analysis API. Everything runs locally in
-podman; no CodeCrafters account or server is involved.
+A CodeCrafters-style course for a junior backend developer, alongside the Framewise assignment
+(`../framewise/ASSIGNMENTS.md`). In 22 stages, each checked by a black-box tester, the learner
+grows a Python CLI into a video-analysis service: an API, a Postgres job queue with workers that
+survive crashes, results queried in SQL, multi-process performance work, metrics, live progress and
+outage handling.
+
+Computer vision is a black box here. The detector, `fwdetect`, is a small NumPy wheel in
+`packages/fwdetect/` with a written contract: three labels, a cost that grows with pixels and holds
+the GIL, a trace file for the tester, and a frame that crashes the process on purpose. The learning
+is in everything around it. Each stage is chosen so the previous design breaks and has to be
+refactored; the stage text says why, under "Why your design just broke".
 
 Layout copied from [codecrafters-io/build-your-own-http-server](https://github.com/codecrafters-io/build-your-own-http-server);
-the tester is [framewise-tester](https://github.com/GuyLevavi/framewise-tester) (clone it next to this repo
-for the tools below). Both are MIT; see `LICENSE` for CodeCrafters' notice. Learners work in
+the tester is [framewise-tester](https://github.com/GuyLevavi/framewise-tester) (clone it next to this repo).
+Both are MIT; see `LICENSE` for CodeCrafters' notice. Learners with Nix can work in
 [codecrafters-framewise-python](https://github.com/GuyLevavi/codecrafters-framewise-python), which pins both
-as flake inputs and runs `./test.sh` with Python from nixpkgs (the protocol of
-[build-your-own-y](https://github.com/GuyLevavi/build-your-own-y)).
-Stage texts are written for this course, not copied.
+as flake inputs (the protocol of [build-your-own-y](https://github.com/GuyLevavi/build-your-own-y)).
 
 ## Try it as a learner
 
 ```sh
-cp -r compiled_starters/python ~/fw-attempt         # your repo; edit app/main.py
-tools/run_tests.sh ~/fw-attempt pb1                 # stage 1 (first run builds the image: ~1-2 min)
-tools/run_tests.sh ~/fw-attempt mo2                 # stages 1..7
-tools/run_tests.sh ~/fw-attempt ap3 --only          # just one stage
+cp -r compiled_starters/python ~/fw-attempt                         # your repo; start in app/main.py
+FRAMEWISE_RUNNER=native tools/run_tests.sh ~/fw-attempt pb1        # stage 1, with uv on this machine
+tools/run_tests.sh ~/fw-attempt wk2                                 # stages 1..10, in a container
+tools/run_tests.sh ~/fw-attempt ap3 --only                          # just one stage
 ```
 
-Read the stages in order in `stage_descriptions/`. Each run re-runs every earlier stage, as
-CodeCrafters does. Only podman (or docker) is needed on the host: the program runs in a
-container with Python 3.13, OpenCV, FastAPI, Uvicorn and PyYAML, and your code mounted at
-`/app`. The tester is built on first use (Go via `nix shell` if `go` isn't installed).
+Each run re-runs every earlier stage, as CodeCrafters does. `FRAMEWISE_RUNNER=native` runs the
+program with uv and Python 3.12 on the host (the twentyx pod); the default runs it in a container
+built from `dockerfiles/`. The tester is built on first use if `go` is installed.
 
-To run your program by hand on NixOS, use the same container:
+### Postgres
 
-```sh
-podman run --rm -it -v ~/fw-attempt:/app -w /app "$(podman images -q framewise-deps | head -1)" \
-  uv run -m app.main probe some.avi
-```
+Stages from ap1 on need a Postgres server the tester may create databases on. Point
+`FRAMEWISE_TEST_DATABASE_URL` at one (the team's hosted instance, see `TRAINEE.md` in framewise) and
+the tester creates a `fw_test_*` database per stage and drops it afterwards. Unset, it starts its
+own with podman. SQL in the solutions sticks to PostgreSQL 14 features; the default image is
+`postgres:18`.
+
+### Airgapped networks
+
+`tools/make_release.sh` builds two tarballs: one for the learner (no solutions) and one for the
+reviewer. Each holds the course, the tester as a static binary and as source with vendored Go
+modules, and with `IMAGES=1` the two container images (`postgres:18`,
+`ghcr.io/astral-sh/uv:python3.12-bookworm-slim`). Python dependencies come from the package index the
+network mirrors; `fwdetect` is vendored in the starter as a wheel.
 
 ## Stages
 
-| # | Slug | Stage | Framewise week |
-| --- | --- | --- | --- |
-| 1 | pb1 | Print the frame size | 1: probe CLI |
-| 2 | pb2 | Report frame rate and length | 1 |
-| 3 | pb3 | Handle a missing file | 1 |
-| 4 | pb4 | Handle a corrupt file | 1 |
-| 5 | pb5 | Save sample frames | 1 |
-| 6 | mo1 | Detect motion | 2: analysis core |
-| 7 | mo2 | Split motion into segments | 2 |
-| 8 | mo3 | Bridge short pauses | 2 |
-| 9 | mo4 | Ignore sensor noise | 2 |
-| 10 | cf1 | Named detectors in YAML | 2: variants in YAML |
-| 11 | cf2 | Reject a bad config | 2 |
-| 12 | ap1 | Serve a health check | 3: HTTP API |
-| 13 | ap2 | Upload a video | 3 |
-| 14 | ap3 | Run a job | 3 |
-| 15 | ap4 | Report job errors | 3 |
-| 16 | ap5 | Run jobs in the background | 4: separate worker |
-| 17 | ap6 | Survive a restart | 4: persistence (SQLite here, Postgres there) |
-| 18 | hd1 | Require an API key | 10: hardening |
-| 19 | hd2 | Limit uploads | 10 |
+| # | Slug | Stage | What breaks | Framewise week |
+| --- | --- | --- | --- | --- |
+| 1 | pb1 | Probe a video | | 1 |
+| 2 | pb2 | Fail cleanly | errors become a type | 1 |
+| 3 | an1 | Analyze a clip | | 2 |
+| 4 | an2 | Analyze a long clip | lists of frames → generators (memory budget) | 2 |
+| 5 | an3 | Profiles in YAML | flags → validated config | 2 |
+| 6 | ap1 | Upload a video | bodies streamed to disk | 3 |
+| 7 | ap2 | Run jobs | analysis off the request path | 3 |
+| 8 | ap3 | Survive a restart | in-memory state → Postgres repository, migrations | 4 |
+| 9 | wk1 | Separate the worker | thread → `work` process, the DB is the queue | 4 |
+| 10 | wk2 | Many workers | `FOR UPDATE` → `SKIP LOCKED` | 4 |
+| 11 | wk3 | Crashed workers | claims get leases, heartbeats, attempts | 4, 8 |
+| 12 | wk4 | Stop gracefully | SIGTERM, give the job back | 8 |
+| 13 | rs1 | Store detections | analysis split into frames and consumers; batches; an index | 4, 10 |
+| 14 | rs2 | Events in SQL | gaps-and-islands with window functions | 10 |
+| 15 | rs3 | Retries without duplicates | idempotent writes | 4, 8 |
+| 16 | pf1 | Downscale | one function owns detector size (fps budget) | 5, 10 |
+| 17 | pf2 | Use every core | process pool over frame ranges (speed-up and memory budget) | 10 |
+| 18 | pf3 | When a process dies | `Pool` hangs; executor + attempts | 10 |
+| 19 | op1 | Metrics and logs | Prometheus, JSON logs with context | 8 |
+| 20 | op2 | Live progress | SSE + LISTEN/NOTIFY | 10 |
+| 21 | op3 | Survive a database outage | liveness vs readiness, 503s, backoff | 8 |
+| 22 | hd1 | API keys | constant-time comparison, one auth layer | 10 |
 
-Left out because they can't be black-box tested on one PC without the internal services: YOLO
-and Triton (week 5), the evaluation gate (6), images, OpenShift and Argo CD (7-9), and the
-events SQL (10). The full assignment still covers them.
+Performance targets are relative to the same machine (calibrated in the same test), so they hold on
+a laptop, the pod or CI. Not covered here, because they can't be black-box tested on one machine:
+YOLO and Triton (week 5), the evaluation gate (6), images, OpenShift and Argo CD (7-9). The
+assignment covers them.
+
+## Reviewing
+
+`REVIEWING.md` has the reviewer's fast track (`tools/fast_track.sh` starts any stage from the
+previous reference solution) and what to look for in each stage beyond passing.
 
 ## Repo layout
 
 | Path | What |
 | --- | --- |
 | `course-definition.yml` | slugs, names and order of the stages |
-| `stage_descriptions/` | one Markdown file per stage: task, exact I/O, how it's tested, hints |
+| `stage_descriptions/` | one Markdown file per stage: task, expected behaviour, tests, the refactor, pointers |
 | `starter_templates/` | the source of the starter; `compiled_starters/python` is generated from it |
 | `solutions/python/NN-slug/code` | reference solution for each stage (passes it and all earlier ones) |
-| `packages/fwdetect/` | the detector shipped to learners as a wheel (the redesigned course's black box) |
-| `dockerfiles/python-3.13.Dockerfile` | the image programs run in |
+| `solutions/python/NN-slug/diff` | what that stage changed in `app/` |
+| `packages/fwdetect/` | the detector, built into the wheel in `starter_templates/python/code/vendor/` |
+| `dockerfiles/python-3.12.Dockerfile` | the image programs run in (container mode) |
 | `tools/run_tests.sh` | run the tester against one directory |
 | `tools/verify_course.sh` | prove every stage: solution N passes 1..N, solution N-1 fails stage N |
+| `tools/compile.sh` | regenerate the compiled starter, the solutions' boilerplate and the diffs |
+| `tools/fast_track.sh` | the reviewer's fast track |
+| `tools/make_release.sh` | the airgap tarballs |
 
 ## Checking the course itself
 
 ```sh
-tools/verify_course.sh                 # all 19 stages, ~10 min at 0.5 CPU; logs in tools/.verify/
-../build-your-own-y/tools/course-sdk compile python   # regenerate compiled_starters/ and the solution diffs
-../build-your-own-y/tools/course-sdk test python      # course-sdk's own check: Dockerfile, starter, every solution
+make -C ../framewise-tester build
+FRAMEWISE_RUNNER=native tools/verify_course.sh        # all stages; logs in tools/.verify/
+FRAMEWISE_RUNNER=native tools/verify_course.sh 9 15   # a range
+tools/compile.sh                                      # after changing a solution or the starter
 ```
-
-[build-your-own-y](https://github.com/GuyLevavi/build-your-own-y)'s `tools/course-sdk` is course-sdk with an offline patch that makes it use the local tester instead of downloading a
-release, add the Dockerfile's generated sections itself instead of calling CodeCrafters' backend,
-and accept podman's build output. `tools/registries.conf` lets podman resolve the short image
-names course-sdk uses.
-
-`nix develop` gives Go, Bun, make and podman; here Python only runs in containers. (The solution repo
-runs it from nixpkgs instead.)
 
 ## Changing a stage
 
 1. Edit `stage_descriptions/base-NN-slug.md` and the test in `../framewise-tester/internal/stages_*.go`.
-2. Update `solutions/python/NN-slug/code/app/` (and the later stages that build on it).
-3. `make -C ../framewise-tester build && tools/verify_course.sh NN NN`.
+2. Update `solutions/python/NN-slug/code/app/` (and the later stages that build on it), then `tools/compile.sh`.
+3. `make -C ../framewise-tester copy_course_file build && tools/verify_course.sh NN NN`.
 
-New clips: edit `../framewise-tester/internal/clips.go` (they are generated at run time, in Go), and
-check `make test` there still agrees with the times quoted in the stage texts.
+Clips are generated at run time, in Go (`../framewise-tester/internal/scenes.go`); `make test` there
+checks the numbers the stage texts quote. Rebuild the wheel after changing `fwdetect`
+(`uv build packages/fwdetect` and copy it into the starter's `vendor/`).

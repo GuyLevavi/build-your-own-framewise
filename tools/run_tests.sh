@@ -14,7 +14,8 @@
 #                creates and drops its own databases there. Unset: the tester starts its own.
 #   TESTER_DIR   directory holding `tester` and `test.sh` (default: ../framewise-tester/dist,
 #                built with `make build` there if missing)
-#   CPUS         CPU limit for the container (default 0.5, as on CodeCrafters)
+#   CPUS         CPU limit for the container (default: all CPUs, at most 4; the pf stages
+#                measure speed-ups across processes)
 #   (set `debug: true` in CODE_DIR/codecrafters.yml for verbose tester logs)
 set -euo pipefail
 
@@ -93,7 +94,7 @@ if ! "$engine" image exists "$image" 2>/dev/null; then
 fi
 
 exec "$engine" run --rm \
-  --cpus "${CPUS:-0.5}" --memory 2g \
+  --cpus "${CPUS:-$(( $(nproc) < 4 ? $(nproc) : 4 ))}" --memory 4g \
   -v "$code_dir:/app:z" \
   -v "$tester_dir:/var/opt/tester:ro,z" \
   -e TESTER_DIR=/var/opt/tester \

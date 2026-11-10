@@ -5,3 +5,4 @@ __pycache__/
 .venv/
 packages/fwdetect/dist/
 packages/fwdetect/uv.lock
+/dist/
