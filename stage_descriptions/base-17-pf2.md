@@ -15,7 +15,7 @@ The tester runs a job on the 1080p clip with `FRAMEWISE_DETECT_PROCESSES=1`, the
 
 ### Why your design just broke
 
-The obvious version (the parent decodes each frame and sends it to a pool) gets nowhere near the target: decoding and resizing are serial in the parent, and every frame is copied between processes. Profile the parent. The fix is to send work, not data: give each process a range of frames to decode itself. Then the loop that consumed frames one at a time has to consume chunks of results in order, and the "should I stop?" check moves between chunks. Use `spawn`: forking a process that has threads and open database connections is asking for trouble.
+The obvious version (the parent decodes each frame and sends it to a pool) runs into a ceiling: decoding and resizing are serial in the parent, and every frame is copied between processes. Profile the parent. The fix is to send work, not data: give each process a range of frames to decode itself. Then the loop that consumed frames one at a time has to consume chunks of results in order, and the "should I stop?" check moves between chunks. Use `spawn`: forking a process that has threads and open database connections is asking for trouble.
 
 ### Pointers
 
