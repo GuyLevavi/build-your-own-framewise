@@ -33,7 +33,7 @@
           pname = "framewise-tester";
           version = tester.shortRev or "dirty";
           src = tester;
-          vendorHash = "sha256-RDudxrn9Q+vaUMhg1tMuy+p3ug380Q5lXU1r3e9ko3Y=";
+          vendorHash = "sha256-Qimqsyrgew/5eRFhFQ0ckBY/eUJK1A/elB2939iuu+g=";
           subPackages = [ "cmd/tester" ];
           # The tester's own test suite needs the reference toolchains; ./test.sh is the check here.
           doCheck = false;
@@ -44,6 +44,18 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
+          # The course's detector, built from its source in the course input.
+          fwdetect =
+            ps:
+            ps.buildPythonPackage {
+              pname = "fwdetect";
+              version = "0.1.0";
+              src = "${course}/packages/fwdetect";
+              pyproject = true;
+              build-system = [ ps.hatchling ];
+              dependencies = [ ps.numpy ];
+              doCheck = false;
+            };
         in
         {
           default = pkgs.mkShell {
@@ -54,15 +66,26 @@
               # don't run on NixOS. your_program.sh runs this Python directly.
               (python3.withPackages (
                 ps: with ps; [
+                  (fwdetect ps)
+                  alembic
                   fastapi
                   numpy
                   opencv4
+                  prometheus-client
+                  psycopg
+                  pytest
                   python-multipart
                   pyyaml
+                  sqlalchemy
                   uvicorn
                 ]
               ))
               uv
+              ruff
+              py-spy
+              # psql, and a local server if you want one (the tester can also start its own
+              # with podman, or use FRAMEWISE_TEST_DATABASE_URL).
+              postgresql
             ];
             PYTHONDONTWRITEBYTECODE = "1";
             # Read by test.sh.

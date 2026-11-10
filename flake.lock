@@ -3,11 +3,11 @@
     "course": {
       "flake": false,
       "locked": {
-        "lastModified": 1793994933,
-        "narHash": "sha256-85CX/amdzouApzveMQ80PHlDcwU5Ob/rcdAL1dhVcjE=",
+        "lastModified": 1794271029,
+        "narHash": "sha256-Tsb9s42s6PtFjd/0KltqLnpLvLkGnNwpF9LjStj0HAI=",
         "ref": "refs/heads/main",
-        "rev": "31bc854d090932317a8d9682343f79312673d052",
-        "revCount": 2,
+        "rev": "a71c04fb0c0e9edf5b8374192e5fde0506ab0c41",
+        "revCount": 6,
         "type": "git",
         "url": "https://github.com/GuyLevavi/build-your-own-framewise"
       },
@@ -42,11 +42,11 @@
     "tester": {
       "flake": false,
       "locked": {
-        "lastModified": 1793994912,
-        "narHash": "sha256-+TJGxBg4l4SQ2McocGwqgMiZcMNTJpm11of+RFAt3UY=",
+        "lastModified": 1794271016,
+        "narHash": "sha256-lE27ceHU8pnOOC6uSPbT27h8eGitc5pc5Fco/ExQA+c=",
         "ref": "refs/heads/main",
-        "rev": "89f836f780b7e0d771e7f106328678f054ef679c",
-        "revCount": 1,
+        "rev": "dd193502394b2fde07711bef6836a5cc0e65608a",
+        "revCount": 5,
         "type": "git",
         "url": "https://github.com/GuyLevavi/framewise-tester"
       },
