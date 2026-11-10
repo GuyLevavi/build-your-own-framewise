@@ -1,0 +1,12 @@
+--- a/app/profiles.py
++++ b/app/profiles.py
+@@ -17,6 +17,9 @@
+     every: int = Field(default=1, ge=1)
+     max_gap_s: float = Field(default=0.5, ge=0)
+     labels: tuple[Label, ...] = Field(default=("person", "car", "bicycle"), min_length=1)
++    # Where the detector runs: fwdetect in this process, or the model server
++    # at FRAMEWISE_MODEL_URL. A setting, not a subclass.
++    detector: Literal["local", "remote"] = "local"
+ 
+ 
+ class ProfilesFile(BaseModel):

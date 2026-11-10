@@ -95,6 +95,12 @@ def create_app(
         find_job(job_id)
         return {"detections": [d.public() for d in store.detections(job_id, from_s, to_s)]}
 
+    @app.get("/videos/{video_id}/events")
+    def get_video_events(video_id: str) -> dict:
+        if store.video(video_id) is None:
+            raise HTTPException(404, "no such video")
+        return {"events": store.video_events(video_id)}
+
     @app.get("/jobs/{job_id}/events")
     def get_events(job_id: str) -> dict:
         find_job(job_id)

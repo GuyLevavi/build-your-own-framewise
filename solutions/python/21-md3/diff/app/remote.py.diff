@@ -1,0 +1,97 @@
+--- a/app/remote.py
++++ b/app/remote.py
+@@ -3,10 +3,13 @@
+ The model is a black box with a contract, read from the server rather than
+ assumed: its input size and pixel format, its batch limit and how many
+ requests it runs at once. This module turns frames into requests and answers
+-back into boxes in the video's own coordinates.
++back into boxes in the video's own coordinates, and decides what a failure
++means: a busy or unreachable server is worth a few more tries; a request the
++model rejects or fails on is not.
+ """
+ 
+ import json
++import time
+ import urllib.error
+ import urllib.request
+ from collections import deque
+@@ -27,12 +30,17 @@
+ 
+ MODEL = "fwdetect"
+ LABELS = ("person", "car", "bicycle")  # the model's class ids, in order
++RETRIES = 3
+ 
+ 
+ class ModelError(FramewiseError):
+     """The model server can't analyze this job: the job fails with this message."""
+ 
+ 
++class _Retryable(Exception):
++    """Worth another try: the server is busy, slow or away for a moment."""
++
++
+ @dataclass(frozen=True)
+ class ModelInfo:
+     width: int
+@@ -42,15 +50,16 @@
+ 
+ 
+ class ModelClient:
+-    def __init__(self, url: str) -> None:
++    def __init__(self, url: str, timeout_s: float) -> None:
+         self.url = url.rstrip("/")
++        self.timeout_s = timeout_s
+         self._info: ModelInfo | None = None
+ 
+     def info(self) -> ModelInfo:
+         """The model's contract, from its metadata and config (asked once)."""
+         if self._info is None:
+-            metadata = self._get(f"/v2/models/{MODEL}")
+-            config = self._get(f"/v2/models/{MODEL}/config")
++            metadata = self._call(lambda: self._get(f"/v2/models/{MODEL}"))
++            config = self._call(lambda: self._get(f"/v2/models/{MODEL}/config"))
+             _, height, width, _ = metadata["inputs"][0]["shape"]
+             instances = sum(group.get("count", 1) for group in config.get("instance_group", []))
+             self._info = ModelInfo(width, height, config["max_batch_size"], max(instances, 1))
+@@ -81,7 +90,7 @@
+                 "Inference-Header-Content-Length": str(len(header)),
+             },
+         )
+-        answer = self._send(request)
++        answer = self._call(lambda: self._send(request))
+         output = next(o for o in answer["outputs"] if o["name"] == "detections")
+         rows = np.asarray(output["data"], dtype=np.float32).reshape(output["shape"])
+         return [
+@@ -98,13 +107,29 @@
+ 
+     def _send(self, request: urllib.request.Request) -> dict:
+         try:
+-            with urllib.request.urlopen(request) as response:
++            with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
+                 return json.load(response)
+         except urllib.error.HTTPError as e:
+             detail = e.read().decode(errors="replace")[:200]
++            if e.code in (429, 502, 503, 504):
++                raise _Retryable(f"{e.code} {detail}") from None
+             raise ModelError(f"model server answered {e.code}: {detail}") from None
+-        except urllib.error.URLError as e:
+-            raise ModelError(f"model server at {self.url} unreachable: {e.reason}") from None
++        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
++            reason = getattr(e, "reason", e)
++            raise _Retryable(f"{type(reason).__name__}: {reason}") from None
++
++    def _call[T](self, attempt: Callable[[], T]) -> T:
++        """attempt(), tried again after a growing pause while the failure is retryable."""
++        for n in range(RETRIES):
++            try:
++                return attempt()
++            except _Retryable as e:
++                if n == RETRIES - 1:
++                    raise ModelError(
++                        f"model server at {self.url} failed {RETRIES} times; last: {e}"
++                    ) from None
++                time.sleep(0.25 * 2**n)
++        raise AssertionError("unreachable")
+ 
+ 
+ def remote_frames(

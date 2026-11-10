@@ -113,12 +113,41 @@ HAVING max(t_s) - min(t_s) >= :min_dur - 1e-9
 ORDER BY start_s
 """)
 
+# A finished job's events, kept as episodes of its video. The key is a hash of
+# what the episode is, so running the video again (or retrying the job)
+# updates the same rows instead of adding new ones.
+EPISODES_SQL = sa.text(f"""
+INSERT INTO results.episodes (key, video_id, rule, start_s, end_s)
+SELECT md5(j.video_id || '/' || :rule || '/' || round(e.start_s::numeric, 3)::text),
+       j.video_id, :rule, e.start_s, e.end_s
+FROM queue.jobs j, ({EVENTS_SQL.text}) e
+WHERE j.id = :job
+ON CONFLICT (key) DO UPDATE SET end_s = EXCLUDED.end_s
+""")
+
+
+def _store_episodes(conn: sa.Connection, job_id: str, rules: dict[str, EventRule]) -> None:
+    for name, rule in rules.items():
+        label_a, label_b = rule.labels
+        conn.execute(
+            EPISODES_SQL,
+            {
+                "job": job_id,
+                "rule": name,
+                "label_a": label_a,
+                "label_b": label_b,
+                "gap": rule.max_gap_s,
+                "min_dur": rule.min_duration_s,
+            },
+        )
+
 
 class Store:
     """Videos, jobs and detections in Postgres. One short transaction per operation."""
 
-    def __init__(self, engine: sa.Engine) -> None:
+    def __init__(self, engine: sa.Engine, rules: dict[str, EventRule] | None = None) -> None:
         self.engine = engine
+        self.rules = rules or {}  # event rules: a finished job stores its episodes
 
     # Videos
 
@@ -240,6 +269,8 @@ class Store:
         self, job_id: str, status: Status, error: str | None = None, labels: Labels | None = None
     ) -> None:
         with self.engine.begin() as conn:
+            if status == Status.DONE:
+                _store_episodes(conn, job_id, self.rules)
             conn.execute(
                 sa.update(db.jobs)
                 .where(db.jobs.c.id == job_id)
@@ -290,3 +321,13 @@ class Store:
                 )
                 found += [{"rule": name, "start_s": r.start_s, "end_s": r.end_s} for r in rows]
         return sorted(found, key=lambda e: (e["start_s"], e["rule"]))
+
+    def video_events(self, video_id: str) -> list[dict[str, Any]]:
+        e = db.episodes.c
+        with self.engine.connect() as conn:
+            rows = conn.execute(
+                sa.select(e.rule, e.start_s, e.end_s)
+                .where(e.video_id == video_id)
+                .order_by(e.start_s, e.rule)
+            )
+            return [{"rule": r.rule, "start_s": r.start_s, "end_s": r.end_s} for r in rows]

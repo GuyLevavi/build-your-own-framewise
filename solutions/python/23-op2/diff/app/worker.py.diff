@@ -1,0 +1,30 @@
+--- a/app/worker.py
++++ b/app/worker.py
+@@ -25,6 +25,7 @@
+     detect_frames,
+     ignore_interrupts,
+     presence,
++    sampled_frames,
+     split,
+ )
+ from app.errors import FramewiseError
+@@ -184,6 +185,7 @@
+         profile = self.profiles[job.profile]
+         sightings: list[tuple[float, set[str]]] = []
+         batch: list[Detection] = []
++        total = sampled_frames(path, profile)
+         for frame_number, result in enumerate(self._results(path, profile, should_stop), 1):
+             boxes = [b for b in result.boxes if b.label in profile.labels]
+             sightings.append((result.t_s, {b.label for b in boxes}))
+@@ -192,9 +194,9 @@
+                 for b in boxes
+             ]
+             if frame_number % self.settings.batch_frames == 0:
+-                self.store.add_detections(job.id, batch)
++                self.store.save_batch(job.id, batch, min(frame_number / total, 0.99))
+                 batch = []
+-        self.store.add_detections(job.id, batch)
++        self.store.save_batch(job.id, batch, 0.99)
+         return presence(sightings, profile), len(sightings)
+ 
+     def _results(

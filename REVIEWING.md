@@ -6,7 +6,7 @@ yourself, and what to look for at each stage.
 
 ## The fast track
 
-You don't need to build all 22 stages to review them. For each stage:
+You don't need to build all 25 stages to review them. For each stage:
 
 ```sh
 tools/fast_track.sh wk3 ~/fw-review          # app/ becomes the reference solution of wk2
@@ -42,17 +42,20 @@ passing, check:
 | wk4 | Signal handler only sets a flag; release only if the job is still theirs; exit 0. |
 | rs1 | Batched inserts (executemany), not one statement per row; index matches the query (job_id, t_s). |
 | rs2 ★ | One SQL query with window functions; bound parameters, no f-strings into SQL; they can read the plan. |
-| rs3 | Cleanup in the claim's transaction (or attempt-tagged rows, or upsert); they can say why they chose it. |
+| rs3 | Cleanup in the claim's transaction (or attempt-tagged rows, or upsert); they can say why they chose it. Episodes keyed by a hash of (video, rule, start) with `ON CONFLICT`, written in the same transaction that marks the job DONE. |
 | pf1 | One function owns detector size; profile before/after (Scalene or py-spy) in the PR. |
 | pf2 ★ | Work sent to processes as ranges, not frames; `spawn`; a measured speed-up in the PR; memory bounded. |
 | pf3 | A dead pool process costs an attempt and replaces the pool; no hang. |
-| op1 | Context in log fields (`extra`), JSON formatting in one place; no ids in metric labels; job counts from the DB. |
+| md1 ★ | The detector is a profile setting behind one interface, not an `if` scattered through the worker; the model's size and limits read from its metadata and config, not hard-coded; BGR→RGB and the box scaling in one place, unit-tested. |
+| md2 ★ | Batches of `max_batch_size`; requests in flight bounded by the model's instances; the reader blocks when they're all out (no `Executor.map` over the whole video). Ask them to show the memory with and without the bound. |
+| md3 | One retry policy in the client: 503 and connection errors retried with backoff, 4xx and 500 not; a timeout on every call, metadata included; the job's error names the model server. |
+| op1 | Context in log fields (`extra`), JSON formatting in one place; no ids in metric labels; job counts and frames from the DB; fps computed in the worker and stored with the job. |
 | op2 ★ | NOTIFY in the batch's transaction; LISTEN before the first read; async endpoint with its own connection. |
 | op3 ★ | 503 via one exception handler; liveness vs readiness; worker backs off and never records a job FAILED for a DB blip. |
 | hd1 | `hmac.compare_digest`; one place that applies auth; the key not in logs or reprs. |
 
 ## Things the tester can't check
 
-Ask for these in review: type hints that `mypy`/`pyright` accept, `ruff` clean, unit tests for pure
+Ask for these in review: type hints that `basedpyright` (the team's checker) accepts, `ruff` clean, unit tests for pure
 logic (segments, events rules, settings), a README section per command, and profiles attached to
 the performance PRs.

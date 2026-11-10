@@ -66,6 +66,18 @@ detections = sa.Table(
     schema="results",
 )
 
+episodes = sa.Table(
+    "episodes",
+    metadata,
+    sa.Column("key", sa.Text, primary_key=True),
+    sa.Column("video_id", sa.Text, sa.ForeignKey("results.videos.id"), nullable=False),
+    sa.Column("rule", sa.Text, nullable=False),
+    sa.Column("start_s", sa.Float, nullable=False),
+    sa.Column("end_s", sa.Float, nullable=False),
+    sa.Index("episodes_video_start", "video_id", "start_s"),
+    schema="results",
+)
+
 
 def database_url() -> str:
     url = os.environ.get("DATABASE_URL")

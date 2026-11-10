@@ -1,0 +1,55 @@
+--- a/app/worker.py
++++ b/app/worker.py
+@@ -28,6 +28,7 @@
+ )
+ from app.errors import FramewiseError
+ from app.profiles import Profile
++from app.remote import ModelClient, ModelError, remote_frames
+ from app.store import Detection, Job, Status, Store
+ 
+ log = logging.getLogger(__name__)
+@@ -41,6 +42,7 @@
+     batch_frames: int = 50
+     processes: int = 1
+     chunk_frames: int = 50
++    model_url: str | None = None
+ 
+     @classmethod
+     def from_env(cls) -> "WorkerSettings":
+@@ -48,6 +50,7 @@
+             lease_s=float(os.environ.get("FRAMEWISE_LEASE_S", "30")),
+             max_attempts=int(os.environ.get("FRAMEWISE_MAX_ATTEMPTS", "3")),
+             processes=int(os.environ.get("FRAMEWISE_DETECT_PROCESSES", "1")),
++            model_url=os.environ.get("FRAMEWISE_MODEL_URL") or None,
+         )
+ 
+ 
+@@ -87,6 +90,16 @@
+         self.settings = settings
+         self.stop = threading.Event()
+         self.pool = self._pool() if settings.processes > 1 else None
++        self._model: ModelClient | None = None
++
++    def model(self) -> ModelClient:
++        if self._model is None:
++            if not self.settings.model_url:
++                raise ModelError(
++                    "the profile's detector is remote, and FRAMEWISE_MODEL_URL isn't set"
++                )
++            self._model = ModelClient(self.settings.model_url)
++        return self._model
+ 
+     def _pool(self) -> ProcessPoolExecutor:
+         # An executor, not multiprocessing.Pool: when one of its processes dies,
+@@ -166,7 +179,10 @@
+     def _results(
+         self, path: Path, profile: Profile, should_stop: Callable[[], bool]
+     ) -> Iterator[FrameResult]:
+-        """Every sampled frame's result, in order: here, or from the pool a chunk at a time."""
++        """Every sampled frame's result, in order: from the model server, here, or from the pool."""
++        if profile.detector == "remote":
++            yield from remote_frames(path, profile, self.model(), should_stop)
++            return
+         if self.pool is None:
+             yield from detect_frames(path, profile, should_stop)
+             return

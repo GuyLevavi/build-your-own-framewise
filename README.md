@@ -1,10 +1,10 @@
 # Build your own Framewise
 
 A CodeCrafters-style course for a junior backend developer, alongside the Framewise assignment
-(`../framewise/ASSIGNMENTS.md`). In 22 stages, each checked by a black-box tester, the learner
+(`../framewise/ASSIGNMENTS.md`). In 25 stages, each checked by a black-box tester, the learner
 grows a Python CLI into a video-analysis service: an API, a Postgres job queue with workers that
-survive crashes, results queried in SQL, multi-process performance work, metrics, live progress and
-outage handling.
+survive crashes, results queried in SQL, multi-process performance work, a model server called
+over Triton's HTTP protocol, metrics, live progress and outage handling.
 
 Computer vision is a black box here. The detector, `fwdetect`, is a small NumPy wheel in
 `packages/fwdetect/` with a written contract: three labels, a cost that grows with pixels and holds
@@ -65,19 +65,25 @@ network mirrors; `fwdetect` is vendored in the starter as a wheel.
 | 12 | wk4 | Stop gracefully | SIGTERM, give the job back | 8 |
 | 13 | rs1 | Store detections | analysis split into frames and consumers; batches; an index | 4, 10 |
 | 14 | rs2 | Events in SQL | gaps-and-islands with window functions | 10 |
-| 15 | rs3 | Retries without duplicates | idempotent writes | 4, 8 |
+| 15 | rs3 | Retries without duplicates | idempotent writes; episodes keyed by what they are | 4, 8, 10 |
 | 16 | pf1 | Downscale | one function owns detector size (fps budget) | 5, 10 |
 | 17 | pf2 | Use every core | process pool over frame ranges (speed-up and memory budget) | 10 |
 | 18 | pf3 | When a process dies | `Pool` hangs; executor + attempts | 10 |
-| 19 | op1 | Metrics and logs | Prometheus, JSON logs with context | 8 |
-| 20 | op2 | Live progress | SSE + LISTEN/NOTIFY | 10 |
-| 21 | op3 | Survive a database outage | liveness vs readiness, 503s, backoff | 8 |
-| 22 | hd1 | API keys | constant-time comparison, one auth layer | 10 |
+| 19 | md1 | Call a model server | the detector becomes a setting; RGB, model size, its own contract | 2, 5 |
+| 20 | md2 | Batch and pipeline | one frame at a time → batches in flight, with backpressure (fps and memory budget) | 5, 10 |
+| 21 | md3 | When the model server fails | timeouts, retry policy, failing a job clearly | 5 |
+| 22 | op1 | Metrics and logs | Prometheus, fps per job, JSON logs with context | 8 |
+| 23 | op2 | Live progress | SSE + LISTEN/NOTIFY | 10 |
+| 24 | op3 | Survive a database outage | liveness vs readiness, 503s, backoff | 8 |
+| 25 | hd1 | API keys | constant-time comparison, one auth layer | 10 |
 
 Performance targets are relative to the same machine (calibrated in the same test), so they hold on
-a laptop, the pod or CI. Not covered here, because they can't be black-box tested on one machine:
-YOLO and Triton (week 5), the evaluation gate (6), images, OpenShift and Argo CD (7-9). The
-assignment covers them.
+a laptop, the pod or CI; pf2 needs at least 2 CPUs. The md stages' targets come from the tester's
+own model server, whose cost per request is fixed. That server is a stand-in for Triton (the KServe
+v2 HTTP protocol, binary tensors, `max_batch_size` and `instance_group` in its config) with the same
+coloured-box rule as fwdetect, so the learner meets Triton's contract before the real one in
+week 5. Not covered here: YOLO itself and its pre- and post-processing (week 5), the evaluation gate
+(6), and images, OpenShift and Argo CD (7-9). The assignment covers them.
 
 ## Reviewing
 

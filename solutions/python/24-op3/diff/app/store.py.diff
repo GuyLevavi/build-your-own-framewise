@@ -1,0 +1,13 @@
+--- a/app/store.py
++++ b/app/store.py
+@@ -182,6 +182,10 @@
+         self.engine = engine
+         self.rules = rules or {}  # event rules: a finished job stores its episodes
+ 
++    def ping(self) -> None:
++        with self.engine.connect() as conn:
++            conn.execute(sa.text("SELECT 1"))
++
+     # Videos
+ 
+     def add_video(self, video: Video) -> None:

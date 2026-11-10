@@ -1,0 +1,91 @@
+--- a/app/store.py
++++ b/app/store.py
+@@ -42,6 +42,15 @@
+     labels: Labels | None
+     attempts: int = 0
+ 
++    frames: int | None = None  # frames analyzed, once DONE
++    analysis_s: float | None = None
++
++    @property
++    def fps(self) -> float | None:
++        if not self.frames or not self.analysis_s:
++            return None
++        return round(self.frames / self.analysis_s, 1)
++
+     def public(self) -> dict[str, Any]:
+         return {
+             "id": self.id,
+@@ -50,6 +59,8 @@
+             "status": self.status.value,
+             "error": self.error,
+             "labels": self.labels or {},
++            "frames": self.frames,
++            "fps": self.fps,
+             "attempts": self.attempts,
+         }
+ 
+@@ -82,7 +93,15 @@
+ 
+ def _job(row: sa.Row) -> Job:
+     return Job(
+-        row.id, row.video_id, row.profile, Status(row.status), row.error, row.labels, row.attempts
++        row.id,
++        row.video_id,
++        row.profile,
++        Status(row.status),
++        row.error,
++        row.labels,
++        row.attempts,
++        frames=row.frames,
++        analysis_s=row.analysis_s,
+     )
+ 
+ 
+@@ -275,7 +294,13 @@
+             )
+ 
+     def finish(
+-        self, job_id: str, status: Status, error: str | None = None, labels: Labels | None = None
++        self,
++        job_id: str,
++        status: Status,
++        error: str | None = None,
++        labels: Labels | None = None,
++        frames: int | None = None,
++        seconds: float | None = None,
+     ) -> None:
+         with self.engine.begin() as conn:
+             if status == Status.DONE:
+@@ -287,11 +312,31 @@
+                     status=status.value,
+                     error=error,
+                     labels=labels,
++                    frames=frames,
++                    analysis_s=seconds,
+                     lease_until=None,
+                     updated_at=sa.func.now(),
+                 )
+             )
+ 
++    def frames_analyzed(self) -> int:
++        """Frames analyzed by finished jobs, whichever worker ran them."""
++        jobs = db.jobs.c
++        with self.engine.connect() as conn:
++            total = conn.execute(
++                sa.select(sa.func.coalesce(sa.func.sum(jobs.frames), 0)).where(
++                    jobs.status == Status.DONE.value
++                )
++            ).scalar_one()
++        return int(total)
++
++    def count_jobs(self) -> dict[Status, int]:
++        with self.engine.connect() as conn:
++            rows = conn.execute(
++                sa.select(db.jobs.c.status, sa.func.count()).group_by(db.jobs.c.status)
++            )
++            return {Status(status): count for status, count in rows}
++
+     # Detections
+ 
+     def add_detections(self, job_id: str, detections: Iterable[Detection]) -> None:
