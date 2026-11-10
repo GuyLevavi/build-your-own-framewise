@@ -97,4 +97,6 @@ func (p *dbProxy) close() {
 	p.listener.Close()
 }
 
-func (p *dbProxy) String() string { return fmt.Sprintf("proxy %s -> %s", p.listener.Addr(), p.upstream) }
+func (p *dbProxy) String() string {
+	return fmt.Sprintf("proxy %s -> %s", p.listener.Addr(), p.upstream)
+}

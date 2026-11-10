@@ -408,7 +408,7 @@ func testOutage(harness *test_case_harness.TestCaseHarness) error {
 		harness.Logger.Successf("✓ %d in %.1f s", c.want, r.took.Seconds())
 	}
 	time.Sleep(7 * time.Second)
-	for name, p := range map[string]*proc{"server": sv.p, "worker": sv.workers[0]} {
+	for name, p := range map[string]*proc{"server": sv.p.(*proc), "worker": sv.workers[0]} {
 		if p.exited() {
 			return fmt.Errorf("expected the %s to ride out the outage, it exited with %d", name, p.result.ExitCode)
 		}
@@ -495,7 +495,7 @@ func testAPIKey(harness *test_case_harness.TestCaseHarness) error {
 		return err
 	}
 	sv.stop()
-	for _, p := range append([]*proc{sv.p}, sv.workers...) {
+	for _, p := range append([]*proc{sv.p.(*proc)}, sv.workers...) {
 		p.stop()
 		if strings.Contains(p.stderr(), key) {
 			return fmt.Errorf("expected the API key never to be logged, but the %s's stderr contains it", p.name)

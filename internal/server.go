@@ -16,7 +16,7 @@ import (
 // server is a running `./your_program.sh serve`.
 type server struct {
 	harness *test_case_harness.TestCaseHarness
-	p       *proc
+	p       running // the server's process, or its container
 	base    string
 	apiKey  string // sent as X-API-Key when set
 	client  *http.Client
@@ -71,6 +71,14 @@ func startServer(harness *test_case_harness.TestCaseHarness, dataDir string, env
 // stop sends SIGTERM to the server's process group.
 func (s *server) stop() { s.p.stop() }
 
+// running is what the tester needs from a started server or worker: a process
+// (`./your_program.sh ...`) or a container (the image stages).
+type running interface {
+	exited() bool
+	stop()
+	kill()
+}
+
 type response struct {
 	status int
 	raw    []byte
@@ -105,7 +113,7 @@ func (s *server) send(method, path, contentType string, body []byte, headers map
 	start := time.Now()
 	resp, err := s.client.Do(request)
 	if err != nil {
-		if s.p.exited() {
+		if s.p != nil && s.p.exited() {
 			return response{}, fmt.Errorf("%s %s: your server has exited", method, path)
 		}
 		return response{}, fmt.Errorf("%s %s: %v", method, path, err)

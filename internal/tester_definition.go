@@ -35,5 +35,10 @@ var testerDefinition = tester_definition.TesterDefinition{
 		{Slug: "op2", TestFunc: testProgress, Timeout: 300 * time.Second},
 		{Slug: "op3", TestFunc: testOutage, Timeout: 300 * time.Second},
 		{Slug: "hd1", TestFunc: testAPIKey, Timeout: 180 * time.Second},
+		{Slug: "ci1", TestFunc: testGateMerges, Timeout: 1200 * time.Second},
+		{Slug: "im1", TestFunc: testBuildImage, Timeout: 900 * time.Second},
+		{Slug: "im2", TestFunc: testRunPod, Timeout: 900 * time.Second},
+		{Slug: "hm1", TestFunc: testChart, Timeout: 180 * time.Second},
+		{Slug: "hm2", TestFunc: testReleaseByCommit, Timeout: 300 * time.Second},
 	},
 }
