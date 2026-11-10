@@ -12,7 +12,8 @@ description_md: |-
   survive crashes, results you can query, and the speed and memory budgets of production.
 
   Along the way you'll learn about streaming data, YAML config, FastAPI, Postgres and Alembic,
-  `SKIP LOCKED` queues, signals, SQL over results, profiling, multiprocessing and observability.
+  `SKIP LOCKED` queues, signals, SQL over results, profiling, multiprocessing, calling a model
+  server, and observability.
 
 short_description_md: |-
   Learn about job queues, Postgres, workers, profiling and running a service
