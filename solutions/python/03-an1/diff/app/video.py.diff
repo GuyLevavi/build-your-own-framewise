@@ -8,7 +8,7 @@
  
  from app.errors import FramewiseError
  
-@@ -57,3 +58,14 @@
+@@ -61,3 +62,14 @@
  def probe(path: Path) -> VideoInfo:
      with open_video(path) as (_, info):
          return info

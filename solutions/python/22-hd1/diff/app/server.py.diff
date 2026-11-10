@@ -1,0 +1,44 @@
+--- a/app/server.py
++++ b/app/server.py
+@@ -1,7 +1,7 @@
+ """The HTTP API."""
+ 
+ import os
+-from dataclasses import dataclass
++from dataclasses import dataclass, field
+ from pathlib import Path
+ 
+ import sqlalchemy as sa
+@@ -9,6 +9,7 @@
+ from fastapi.responses import JSONResponse, StreamingResponse
+ from pydantic import BaseModel
+ 
++from app.auth import require_api_key
+ from app.events import EventRule
+ from app.metrics import instrument
+ from app.profiles import Profile
+@@ -23,10 +24,15 @@
+ class Settings:
+     data_dir: Path
+     max_upload_bytes: int
++    api_key: str | None = field(default=None, repr=False)  # keep it out of logs and tracebacks
+ 
+     @classmethod
+     def from_env(cls, data_dir: Path) -> "Settings":
+-        return cls(data_dir, int(os.environ.get("FRAMEWISE_MAX_UPLOAD_MB", "1024")) * 1024 * 1024)
++        return cls(
++            data_dir,
++            int(os.environ.get("FRAMEWISE_MAX_UPLOAD_MB", "1024")) * 1024 * 1024,
++            os.environ.get("FRAMEWISE_API_KEY") or None,
++        )
+ 
+ 
+ class JobRequest(BaseModel):
+@@ -40,6 +46,7 @@
+     """The API records videos and jobs; `work` processes run the jobs."""
+     app = FastAPI(title="Framewise")
+     instrument(app, store)
++    require_api_key(app, settings.api_key)
+     videos_dir = settings.data_dir / "videos"
+     videos_dir.mkdir(parents=True, exist_ok=True)
+ 

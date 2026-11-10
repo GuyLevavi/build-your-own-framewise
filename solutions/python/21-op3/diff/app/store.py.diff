@@ -1,0 +1,13 @@
+--- a/app/store.py
++++ b/app/store.py
+@@ -140,6 +140,10 @@
+     def __init__(self, engine: sa.Engine) -> None:
+         self.engine = engine
+ 
++    def ping(self) -> None:
++        with self.engine.connect() as conn:
++            conn.execute(sa.text("SELECT 1"))
++
+     # Videos
+ 
+     def add_video(self, video: Video) -> None:

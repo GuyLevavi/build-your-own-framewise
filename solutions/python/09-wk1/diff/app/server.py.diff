@@ -1,0 +1,51 @@
+--- a/app/server.py
++++ b/app/server.py
+@@ -8,8 +8,7 @@
+ from pydantic import BaseModel
+ 
+ from app.profiles import Profile
+-from app.store import Store, Video, new_id
+-from app.worker import Worker
++from app.store import Job, Store, Video, new_id
+ 
+ VIDEO_SUFFIXES = {".avi", ".mp4", ".mkv", ".mov"}
+ CHUNK = 1 << 20
+@@ -31,14 +30,16 @@
+ 
+ 
+ def create_app(settings: Settings, store: Store, profiles: dict[str, Profile]) -> FastAPI:
++    """The API records videos and jobs; `work` processes run the jobs."""
+     app = FastAPI(title="Framewise")
+     videos_dir = settings.data_dir / "videos"
+     videos_dir.mkdir(parents=True, exist_ok=True)
+-    worker = Worker(store, profiles)
+ 
+-    @app.on_event("startup")
+-    def start_worker() -> None:
+-        worker.start()
++    def find_job(job_id: str) -> Job:
++        job = store.job(job_id)
++        if job is None:
++            raise HTTPException(404, "no such job")
++        return job
+ 
+     @app.get("/health")
+     def health() -> dict[str, str]:
+@@ -80,15 +81,10 @@
+             raise HTTPException(404, "no such video")
+         if request.profile not in profiles:
+             raise HTTPException(422, f"unknown profile {request.profile!r}")
+-        job = store.add_job(request.video_id, request.profile)
+-        worker.submit(job.id)
+-        return job.public()
++        return store.add_job(request.video_id, request.profile).public()
+ 
+     @app.get("/jobs/{job_id}")
+     def get_job(job_id: str) -> dict:
+-        job = store.job(job_id)
+-        if job is None:
+-            raise HTTPException(404, "no such job")
+-        return job.public()
++        return find_job(job_id).public()
+ 
+     return app

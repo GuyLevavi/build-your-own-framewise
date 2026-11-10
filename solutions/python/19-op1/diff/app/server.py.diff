@@ -1,0 +1,18 @@
+--- a/app/server.py
++++ b/app/server.py
+@@ -8,6 +8,7 @@
+ from pydantic import BaseModel
+ 
+ from app.events import EventRule
++from app.metrics import instrument
+ from app.profiles import Profile
+ from app.store import Job, Store, Video, new_id
+ 
+@@ -35,6 +36,7 @@
+ ) -> FastAPI:
+     """The API records videos and jobs; `work` processes run the jobs."""
+     app = FastAPI(title="Framewise")
++    instrument(app, store)
+     videos_dir = settings.data_dir / "videos"
+     videos_dir.mkdir(parents=True, exist_ok=True)
+ 

@@ -1,0 +1,39 @@
+--- a/app/main.py
++++ b/app/main.py
+@@ -32,12 +32,23 @@
+     from app.server import Settings, create_app
+     from app.store import Store
+ 
+-    profiles_path = Path(os.environ.get("FRAMEWISE_PROFILES", "profiles.yaml"))
+-    profiles = load_profiles(profiles_path)
+-    app = create_app(Settings.from_env(args.data_dir), Store(make_engine()), profiles)
++    app = create_app(Settings.from_env(args.data_dir), Store(make_engine()), service_profiles())
+     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+ 
+ 
++def cmd_work(args: argparse.Namespace) -> None:
++    from app.db import make_engine
++    from app.store import Store
++    from app.worker import Worker, WorkerSettings
++
++    worker = Worker(Store(make_engine()), service_profiles(), WorkerSettings.from_env())
++    worker.run_forever()
++
++
++def service_profiles() -> dict[str, Profile]:
++    return load_profiles(Path(os.environ.get("FRAMEWISE_PROFILES", "profiles.yaml")))
++
++
+ def cmd_migrate(args: argparse.Namespace) -> None:
+     from app.db import migrate
+ 
+@@ -66,6 +77,9 @@
+     s.add_argument("--data-dir", type=Path, default=Path("data"))
+     s.set_defaults(run=cmd_serve)
+ 
++    w = sub.add_parser("work", help="run jobs from the queue until stopped")
++    w.set_defaults(run=cmd_work)
++
+     m = sub.add_parser("migrate", help="create or upgrade the database schema")
+     m.set_defaults(run=cmd_migrate)
+ 

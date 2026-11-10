@@ -1,0 +1,74 @@
+--- a/app/store.py
++++ b/app/store.py
+@@ -1,6 +1,7 @@
+-"""Where videos and jobs live: the repository the API and workers talk to."""
++"""Where videos, jobs and detections live: the repository the API and workers talk to."""
+ 
+ import uuid
++from collections.abc import Iterable
+ from dataclasses import dataclass
+ from datetime import timedelta
+ from enum import StrEnum
+@@ -52,6 +53,28 @@
+         }
+ 
+ 
++@dataclass(frozen=True)
++class Detection:
++    frame: int
++    t_s: float
++    label: str
++    x: int
++    y: int
++    w: int
++    h: int
++    score: float
++
++    def public(self) -> dict[str, Any]:
++        return {
++            "t_s": self.t_s,
++            "label": self.label,
++            "x": self.x,
++            "y": self.y,
++            "w": self.w,
++            "h": self.h,
++        }
++
++
+ def new_id() -> str:
+     return uuid.uuid4().hex
+ 
+@@ -63,7 +86,7 @@
+ 
+ 
+ class Store:
+-    """Videos and jobs in Postgres. One short transaction per operation."""
++    """Videos, jobs and detections in Postgres. One short transaction per operation."""
+ 
+     def __init__(self, engine: sa.Engine) -> None:
+         self.engine = engine
+@@ -197,3 +220,24 @@
+                     updated_at=sa.func.now(),
+                 )
+             )
++
++    # Detections
++
++    def add_detections(self, job_id: str, detections: Iterable[Detection]) -> None:
++        rows = [{"job_id": job_id, **d.__dict__} for d in detections]
++        if rows:
++            with self.engine.begin() as conn:
++                conn.execute(sa.insert(db.detections), rows)
++
++    def detections(self, job_id: str, from_s: float | None, to_s: float | None) -> list[Detection]:
++        d = db.detections.c
++        query = sa.select(d.frame, d.t_s, d.label, d.x, d.y, d.w, d.h, d.score).where(
++            d.job_id == job_id
++        )
++        if from_s is not None:
++            query = query.where(d.t_s >= from_s - 1e-9)
++        if to_s is not None:
++            query = query.where(d.t_s <= to_s + 1e-9)
++        with self.engine.connect() as conn:
++            rows = conn.execute(query.order_by(d.t_s, d.label))
++            return [Detection(*row) for row in rows]

@@ -1,0 +1,90 @@
+--- a/app/worker.py
++++ b/app/worker.py
+@@ -6,14 +6,25 @@
+ """
+ 
+ import logging
++import multiprocessing
++import multiprocessing.pool
+ import os
+ import threading
+-from collections.abc import Callable
++from collections.abc import Callable, Iterator
+ from dataclasses import dataclass
+ from pathlib import Path
+ from typing import Self
+ 
+-from app.analysis import Interrupted, Labels, detect_frames, presence
++from app.analysis import (
++    FrameResult,
++    Interrupted,
++    Labels,
++    detect_chunk,
++    detect_frames,
++    ignore_interrupts,
++    presence,
++    split,
++)
+ from app.errors import FramewiseError
+ from app.profiles import Profile
+ from app.store import Detection, Job, Status, Store
+@@ -27,12 +38,15 @@
+     max_attempts: int = 3
+     poll_s: float = 0.5
+     batch_frames: int = 50
++    processes: int = 1
++    chunk_frames: int = 50
+ 
+     @classmethod
+     def from_env(cls) -> "WorkerSettings":
+         return cls(
+             lease_s=float(os.environ.get("FRAMEWISE_LEASE_S", "30")),
+             max_attempts=int(os.environ.get("FRAMEWISE_MAX_ATTEMPTS", "3")),
++            processes=int(os.environ.get("FRAMEWISE_DETECT_PROCESSES", "1")),
+         )
+ 
+ 
+@@ -71,6 +85,16 @@
+         self.profiles = profiles
+         self.settings = settings
+         self.stop = threading.Event()
++        self.pool = self._pool() if settings.processes > 1 else None
++
++    def _pool(self) -> multiprocessing.pool.Pool:
++        # spawn, not fork: this process has threads and database connections.
++        context = multiprocessing.get_context("spawn")
++        return context.Pool(self.settings.processes, initializer=ignore_interrupts)
++
++    def close(self) -> None:
++        if self.pool is not None:
++            self.pool.terminate()
+ 
+     def run_forever(self) -> None:
+         while not self.stop.is_set():
+@@ -108,7 +132,7 @@
+         profile = self.profiles[job.profile]
+         sightings: list[tuple[float, set[str]]] = []
+         batch: list[Detection] = []
+-        for frame_number, result in enumerate(detect_frames(path, profile, should_stop), 1):
++        for frame_number, result in enumerate(self._results(path, profile, should_stop), 1):
+             boxes = [b for b in result.boxes if b.label in profile.labels]
+             sightings.append((result.t_s, {b.label for b in boxes}))
+             batch += [
+@@ -120,3 +144,17 @@
+                 batch = []
+         self.store.add_detections(job.id, batch)
+         return presence(sightings, profile)
++
++    def _results(
++        self, path: Path, profile: Profile, should_stop: Callable[[], bool]
++    ) -> Iterator[FrameResult]:
++        """Every sampled frame's result, in order: here, or from the pool a chunk at a time."""
++        if self.pool is None:
++            yield from detect_frames(path, profile, should_stop)
++            return
++        for results in self.pool.imap(
++            detect_chunk, split(path, profile, self.settings.chunk_frames)
++        ):
++            if should_stop():
++                raise Interrupted
++            yield from results

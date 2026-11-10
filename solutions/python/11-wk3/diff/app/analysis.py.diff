@@ -1,0 +1,62 @@
+--- a/app/analysis.py
++++ b/app/analysis.py
+@@ -1,11 +1,10 @@
+-"""Turning detector output into when each label was present."""
++"""Running the detector over a video, and turning sightings into segments."""
+ 
+-from collections.abc import Iterable
++from collections.abc import Callable, Iterable, Iterator
+ from dataclasses import dataclass
+ from pathlib import Path
+ 
+ import fwdetect
+-import numpy as np
+ 
+ from app.profiles import Profile
+ from app.video import frames, open_video
+@@ -14,6 +13,28 @@
+ Labels = dict[str, list[Segment]]
+ 
+ 
++@dataclass(frozen=True)
++class FrameResult:
++    index: int
++    t_s: float
++    boxes: list[fwdetect.Box]
++
++
++class Interrupted(Exception):
++    """The caller asked analysis to stop between frames."""
++
++
++def detect_frames(
++    path: Path, profile: Profile, should_stop: Callable[[], bool] = lambda: False
++) -> Iterator[FrameResult]:
++    """Run the detector on every sampled frame, one frame at a time."""
++    with open_video(path) as (capture, info):
++        for index, frame in frames(capture, profile.every):
++            if should_stop():
++                raise Interrupted
++            yield FrameResult(index, index / info.fps, fwdetect.detect(frame))
++
++
+ @dataclass
+ class _Run:
+     start: float
+@@ -36,14 +57,6 @@
+     }
+ 
+ 
+-def detect_labels(frame: np.ndarray) -> set[str]:
+-    return {box.label for box in fwdetect.detect(frame)}
+-
+-
+ def analyze(path: Path, profile: Profile) -> Labels:
+-    with open_video(path) as (capture, info):
+-        sightings = (
+-            (index / info.fps, detect_labels(frame))
+-            for index, frame in frames(capture, profile.every)
+-        )
+-        return presence(sightings, profile)
++    results = detect_frames(path, profile)
++    return presence(((r.t_s, {b.label for b in r.boxes}) for r in results), profile)

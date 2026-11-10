@@ -1,0 +1,39 @@
+--- a/app/worker.py
++++ b/app/worker.py
+@@ -16,7 +16,7 @@
+ from app.analysis import Interrupted, Labels, detect_frames, presence
+ from app.errors import FramewiseError
+ from app.profiles import Profile
+-from app.store import Job, Status, Store
++from app.store import Detection, Job, Status, Store
+ 
+ log = logging.getLogger(__name__)
+ 
+@@ -26,6 +26,7 @@
+     lease_s: float = 30.0
+     max_attempts: int = 3
+     poll_s: float = 0.5
++    batch_frames: int = 50
+ 
+     @classmethod
+     def from_env(cls) -> "WorkerSettings":
+@@ -105,5 +106,17 @@
+ 
+     def _analyze(self, job: Job, path: Path, should_stop: Callable[[], bool]) -> Labels:
+         profile = self.profiles[job.profile]
+-        results = detect_frames(path, profile, should_stop)
+-        return presence(((r.t_s, {b.label for b in r.boxes}) for r in results), profile)
++        sightings: list[tuple[float, set[str]]] = []
++        batch: list[Detection] = []
++        for frame_number, result in enumerate(detect_frames(path, profile, should_stop), 1):
++            boxes = [b for b in result.boxes if b.label in profile.labels]
++            sightings.append((result.t_s, {b.label for b in boxes}))
++            batch += [
++                Detection(result.index, result.t_s, b.label, b.x, b.y, b.w, b.h, b.score)
++                for b in boxes
++            ]
++            if frame_number % self.settings.batch_frames == 0:
++                self.store.add_detections(job.id, batch)
++                batch = []
++        self.store.add_detections(job.id, batch)
++        return presence(sightings, profile)

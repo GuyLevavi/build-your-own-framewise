@@ -1,0 +1,31 @@
+--- a/app/server.py
++++ b/app/server.py
+@@ -7,6 +7,7 @@
+ from fastapi import FastAPI, HTTPException, UploadFile
+ from pydantic import BaseModel
+ 
++from app.events import EventRule
+ from app.profiles import Profile
+ from app.store import Job, Store, Video, new_id
+ 
+@@ -29,7 +30,9 @@
+     profile: str = "default"
+ 
+ 
+-def create_app(settings: Settings, store: Store, profiles: dict[str, Profile]) -> FastAPI:
++def create_app(
++    settings: Settings, store: Store, profiles: dict[str, Profile], events: dict[str, EventRule]
++) -> FastAPI:
+     """The API records videos and jobs; `work` processes run the jobs."""
+     app = FastAPI(title="Framewise")
+     videos_dir = settings.data_dir / "videos"
+@@ -92,4 +95,9 @@
+         find_job(job_id)
+         return {"detections": [d.public() for d in store.detections(job_id, from_s, to_s)]}
+ 
++    @app.get("/jobs/{job_id}/events")
++    def get_events(job_id: str) -> dict:
++        find_job(job_id)
++        return {"events": store.events(job_id, events)}
++
+     return app

@@ -1,0 +1,19 @@
+--- a/app/worker.py
++++ b/app/worker.py
+@@ -86,9 +86,14 @@
+             return
+         with Heartbeat(self.store, job.id, self.settings.lease_s) as heartbeat:
+             try:
+-                labels = self._analyze(job, Path(video.path), heartbeat.lost.is_set)
++                labels = self._analyze(
++                    job, Path(video.path), lambda: self.stop.is_set() or heartbeat.lost.is_set()
++                )
+             except Interrupted:
+-                log.warning("lost the lease on job %s; leaving it to its new worker", job.id)
++                if heartbeat.lost.is_set():
++                    log.warning("lost the lease on job %s; leaving it to its new worker", job.id)
++                else:
++                    self.store.release(job.id)
+                 return
+             except FramewiseError as e:
+                 self.store.finish(job.id, Status.FAILED, error=str(e))

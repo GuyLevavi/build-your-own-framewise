@@ -1,0 +1,16 @@
+--- a/app/store.py
++++ b/app/store.py
+@@ -261,6 +261,13 @@
+                 )
+             )
+ 
++    def count_jobs(self) -> dict[Status, int]:
++        with self.engine.connect() as conn:
++            rows = conn.execute(
++                sa.select(db.jobs.c.status, sa.func.count()).group_by(db.jobs.c.status)
++            )
++            return {Status(status): count for status, count in rows}
++
+     # Detections
+ 
+     def add_detections(self, job_id: str, detections: Iterable[Detection]) -> None:

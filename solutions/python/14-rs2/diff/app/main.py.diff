@@ -1,0 +1,35 @@
+--- a/app/main.py
++++ b/app/main.py
+@@ -7,6 +7,7 @@
+ from pathlib import Path
+ 
+ from app.errors import FramewiseError
++from app.events import EventRule
+ from app.profiles import Profile, load_profiles, pick
+ 
+ 
+@@ -33,7 +34,9 @@
+     from app.server import Settings, create_app
+     from app.store import Store
+ 
+-    app = create_app(Settings.from_env(args.data_dir), Store(make_engine()), service_profiles())
++    app = create_app(
++        Settings.from_env(args.data_dir), Store(make_engine()), service_profiles(), service_events()
++    )
+     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+ 
+ 
+@@ -53,6 +56,13 @@
+     return load_profiles(Path(os.environ.get("FRAMEWISE_PROFILES", "profiles.yaml")))
+ 
+ 
++def service_events() -> dict[str, EventRule]:
++    from app.events import load_events
++
++    path = os.environ.get("FRAMEWISE_EVENTS")
++    return load_events(Path(path)) if path else {}
++
++
+ def cmd_migrate(args: argparse.Namespace) -> None:
+     from app.db import migrate
+ 

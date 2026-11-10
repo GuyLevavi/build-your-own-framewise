@@ -1,0 +1,34 @@
+[project]
+name = "codecrafters-framewise"
+version = "0.1.0"
+requires-python = ">=3.12"
+# Everything the course needs is here from the start, as on the team's air-gapped machines:
+# a new package must be mirrored first, so ask before adding one.
+dependencies = [
+    "alembic>=1.13",
+    "fastapi>=0.110",
+    "fwdetect",
+    "numpy>=1.26,<2.3",
+    "opencv-python-headless>=4.9",
+    "prometheus-client>=0.20",
+    "psycopg[binary]>=3.1",
+    "python-multipart>=0.0.9",
+    "pyyaml>=6.0",
+    "sqlalchemy>=2.0",
+    "uvicorn>=0.29",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.5"]
+# Profilers for the performance stages: uv run --group profile scalene ...
+profile = ["py-spy>=0.3", "scalene>=1.5"]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.uv.sources]
+# The detector ships with the course as a wheel; it is not on any public index.
+fwdetect = { path = "vendor/fwdetect-0.1.0-py3-none-any.whl" }
+
+[tool.ruff]
+line-length = 100

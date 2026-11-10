@@ -1,0 +1,14 @@
+--- a/app/analysis.py
++++ b/app/analysis.py
+@@ -89,6 +89,11 @@
+     ]
+ 
+ 
++def sampled_frames(path: Path, profile: Profile) -> int:
++    with open_video(path) as (_, info):
++        return -(-info.frame_count // profile.every)
++
++
+ def detect_chunk(chunk: Chunk) -> list[FrameResult]:
+     """Runs in a pool process."""
+     return list(detect_frames(chunk.path, chunk.profile, start=chunk.start, stop=chunk.stop))

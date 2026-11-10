@@ -1,0 +1,21 @@
+--- a/app/video.py
++++ b/app/video.py
+@@ -64,10 +64,14 @@
+         return info
+ 
+ 
+-def frames(capture: cv2.VideoCapture, every: int) -> Iterator[tuple[int, np.ndarray]]:
+-    """Yield (index, frame) for every `every`-th frame, decoding only those."""
+-    index = 0
+-    while True:
++def frames(
++    capture: cv2.VideoCapture, every: int, start: int = 0, stop: int | None = None
++) -> Iterator[tuple[int, np.ndarray]]:
++    """Yield (index, frame) for every `every`-th frame in [start, stop), decoding only those."""
++    if start:
++        capture.set(cv2.CAP_PROP_POS_FRAMES, start)
++    index = start
++    while stop is None or index < stop:
+         if index % every == 0:
+             ok, frame = capture.read()
+             if not ok:

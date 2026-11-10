@@ -1,0 +1,18 @@
+--- a/app/store.py
++++ b/app/store.py
+@@ -236,6 +236,15 @@
+                 )
+             )
+ 
++    def retry(self, job_id: str) -> None:
++        """Put a job back for another attempt, which counts."""
++        with self.engine.begin() as conn:
++            conn.execute(
++                sa.update(db.jobs)
++                .where(db.jobs.c.id == job_id, db.jobs.c.status == Status.RUNNING.value)
++                .values(status=Status.PENDING.value, lease_until=None, updated_at=sa.func.now())
++            )
++
+     def finish(
+         self, job_id: str, status: Status, error: str | None = None, labels: Labels | None = None
+     ) -> None:

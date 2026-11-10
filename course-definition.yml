@@ -79,3 +79,87 @@ stages:
     difficulty: hard
     marketing_md: |-
       In this stage, you'll keep videos and jobs in Postgres, so a restart loses nothing.
+
+  - slug: "wk1"
+    name: "Separate the worker"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll move job execution out of the API into its own `work` process.
+
+  - slug: "wk2"
+    name: "Many workers"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll run several workers against one queue without two of them taking the same job.
+
+  - slug: "wk3"
+    name: "Crashed workers"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll give claims a lease so a job outlives the worker that died running it.
+
+  - slug: "wk4"
+    name: "Stop gracefully"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll make a worker stop cleanly on SIGTERM and hand its job back.
+
+  - slug: "rs1"
+    name: "Store detections"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll store every box in Postgres and serve a time range of them, through an index.
+
+  - slug: "rs2"
+    name: "Events in SQL"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll find events (a person crossing a car) with a gaps-and-islands query.
+
+  - slug: "rs3"
+    name: "Retries without duplicates"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll make a retried job store its results exactly once.
+
+  - slug: "pf1"
+    name: "Downscale"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll make 1080p analysis several times faster by running the detector at a smaller size.
+
+  - slug: "pf2"
+    name: "Use every core"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll split one job across processes, and find out what the parent process costs you.
+
+  - slug: "pf3"
+    name: "When a process dies"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll keep a worker alive and honest when one of its pool processes crashes.
+
+  - slug: "op1"
+    name: "Metrics and logs"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll expose Prometheus metrics and write structured logs a log platform can search.
+
+  - slug: "op2"
+    name: "Live progress"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll stream a job's progress to clients with server-sent events and Postgres LISTEN/NOTIFY.
+
+  - slug: "op3"
+    name: "Survive a database outage"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll keep the API and the workers up while the database is gone, and recover when it's back.
+
+  - slug: "hd1"
+    name: "API keys"
+    difficulty: easy
+    marketing_md: |-
+      In this stage, you'll protect the API with a key, compared the way secrets should be.

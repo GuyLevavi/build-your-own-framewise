@@ -22,7 +22,7 @@
 +
 +
  def main() -> None:
-     logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+     logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
      parser = argparse.ArgumentParser(prog="framewise")
 @@ -59,6 +66,9 @@
      s.add_argument("--data-dir", type=Path, default=Path("data"))

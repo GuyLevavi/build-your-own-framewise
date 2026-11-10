@@ -1,0 +1,11 @@
+--- a/app/db.py
++++ b/app/db.py
+@@ -37,6 +37,8 @@
+     sa.Column("status", sa.Text, nullable=False),
+     sa.Column("error", sa.Text),
+     sa.Column("labels", sa.JSON),
++    sa.Column("attempts", sa.Integer, nullable=False, server_default="0"),
++    sa.Column("lease_until", sa.DateTime(timezone=True)),
+     sa.Column(
+         "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+     ),

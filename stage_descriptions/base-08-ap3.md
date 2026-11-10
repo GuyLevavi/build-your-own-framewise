@@ -5,7 +5,7 @@ Everything has lived in memory so far, so restarting the server loses every uplo
 ### Expected behaviour
 
 - `./your_program.sh migrate` creates or upgrades the schema in the database at `DATABASE_URL` (a `postgresql://` URL) and exits with 0. Running it twice is fine.
-- The schema has two Postgres schemas: `queue` holds the operational, short-lived job records (`queue.jobs`), and `results` holds what the service produces (`results.videos`, later more). Upload files stay under `--data-dir`.
+- The schema has two Postgres schemas: `queue` holds the operational, short-lived job records (`queue.jobs`, keyed by an `id` column holding the job id the API returns), and `results` holds what the service produces (`results.videos`, later more). Upload files stay under `--data-dir`.
 - `serve` reads `DATABASE_URL`. After a restart on the same database and `--data-dir`:
   - uploads made before it still answer `GET /videos/{id}`;
   - finished jobs are unchanged;

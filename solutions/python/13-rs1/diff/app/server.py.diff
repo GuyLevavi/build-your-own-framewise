@@ -1,0 +1,12 @@
+--- a/app/server.py
++++ b/app/server.py
+@@ -87,4 +87,9 @@
+     def get_job(job_id: str) -> dict:
+         return find_job(job_id).public()
+ 
++    @app.get("/jobs/{job_id}/detections")
++    def get_detections(job_id: str, from_s: float | None = None, to_s: float | None = None) -> dict:
++        find_job(job_id)
++        return {"detections": [d.public() for d in store.detections(job_id, from_s, to_s)]}
++
+     return app

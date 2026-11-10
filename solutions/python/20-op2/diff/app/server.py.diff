@@ -1,0 +1,28 @@
+--- a/app/server.py
++++ b/app/server.py
+@@ -5,11 +5,13 @@
+ from pathlib import Path
+ 
+ from fastapi import FastAPI, HTTPException, UploadFile
++from fastapi.responses import StreamingResponse
+ from pydantic import BaseModel
+ 
+ from app.events import EventRule
+ from app.metrics import instrument
+ from app.profiles import Profile
++from app.progress import progress_events
+ from app.store import Job, Store, Video, new_id
+ 
+ VIDEO_SUFFIXES = {".avi", ".mp4", ".mkv", ".mov"}
+@@ -92,6 +94,11 @@
+     def get_job(job_id: str) -> dict:
+         return find_job(job_id).public()
+ 
++    @app.get("/jobs/{job_id}/progress")
++    def get_progress(job_id: str) -> StreamingResponse:
++        find_job(job_id)
++        return StreamingResponse(progress_events(store, job_id), media_type="text/event-stream")
++
+     @app.get("/jobs/{job_id}/detections")
+     def get_detections(job_id: str, from_s: float | None = None, to_s: float | None = None) -> dict:
+         find_job(job_id)

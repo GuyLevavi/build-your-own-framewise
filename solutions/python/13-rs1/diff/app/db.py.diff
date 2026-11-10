@@ -1,0 +1,26 @@
+--- a/app/db.py
++++ b/app/db.py
+@@ -49,6 +49,23 @@
+     schema="queue",
+ )
+ 
++detections = sa.Table(
++    "detections",
++    metadata,
++    sa.Column("id", sa.BigInteger, sa.Identity(), primary_key=True),
++    sa.Column("job_id", sa.Text, sa.ForeignKey("queue.jobs.id"), nullable=False),
++    sa.Column("frame", sa.Integer, nullable=False),
++    sa.Column("t_s", sa.Float, nullable=False),
++    sa.Column("label", sa.Text, nullable=False),
++    sa.Column("x", sa.Integer, nullable=False),
++    sa.Column("y", sa.Integer, nullable=False),
++    sa.Column("w", sa.Integer, nullable=False),
++    sa.Column("h", sa.Integer, nullable=False),
++    sa.Column("score", sa.Float, nullable=False),
++    sa.Index("detections_job_time", "job_id", "t_s"),
++    schema="results",
++)
++
+ 
+ def database_url() -> str:
+     url = os.environ.get("DATABASE_URL")

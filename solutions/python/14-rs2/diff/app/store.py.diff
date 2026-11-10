@@ -1,0 +1,67 @@
+--- a/app/store.py
++++ b/app/store.py
+@@ -11,6 +11,7 @@
+ 
+ from app import db
+ from app.analysis import Labels
++from app.events import EventRule
+ 
+ 
+ class Status(StrEnum):
+@@ -85,6 +86,34 @@
+     )
+ 
+ 
++# Overlapping (label_a, label_b) frames, grouped into islands no more than :gap
++# apart, kept when they last at least :min_dur. The classic gaps-and-islands:
++# mark where a new island starts, then a running sum numbers the islands.
++EVENTS_SQL = sa.text("""
++WITH pairs AS (
++    SELECT DISTINCT a.frame, a.t_s
++    FROM results.detections a
++    JOIN results.detections b ON b.job_id = a.job_id AND b.frame = a.frame
++    WHERE a.job_id = :job AND a.label = :label_a AND b.label = :label_b
++      AND a.x < b.x + b.w AND b.x < a.x + a.w
++      AND a.y < b.y + b.h AND b.y < a.y + a.h
++),
++marked AS (
++    SELECT t_s,
++           CASE WHEN t_s - lag(t_s) OVER (ORDER BY t_s) <= :gap + 1e-9 THEN 0 ELSE 1 END AS starts
++    FROM pairs
++),
++islands AS (
++    SELECT t_s, sum(starts) OVER (ORDER BY t_s) AS island FROM marked
++)
++SELECT min(t_s) AS start_s, max(t_s) AS end_s
++FROM islands
++GROUP BY island
++HAVING max(t_s) - min(t_s) >= :min_dur - 1e-9
++ORDER BY start_s
++""")
++
++
+ class Store:
+     """Videos, jobs and detections in Postgres. One short transaction per operation."""
+ 
+@@ -241,3 +270,21 @@
+         with self.engine.connect() as conn:
+             rows = conn.execute(query.order_by(d.t_s, d.label))
+             return [Detection(*row) for row in rows]
++
++    def events(self, job_id: str, rules: dict[str, EventRule]) -> list[dict[str, Any]]:
++        found = []
++        with self.engine.connect() as conn:
++            for name, rule in rules.items():
++                label_a, label_b = rule.labels
++                rows = conn.execute(
++                    EVENTS_SQL,
++                    {
++                        "job": job_id,
++                        "label_a": label_a,
++                        "label_b": label_b,
++                        "gap": rule.max_gap_s,
++                        "min_dur": rule.min_duration_s,
++                    },
++                )
++                found += [{"rule": name, "start_s": r.start_s, "end_s": r.end_s} for r in rows]
++        return sorted(found, key=lambda e: (e["start_s"], e["rule"]))

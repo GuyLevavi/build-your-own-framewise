@@ -22,7 +22,7 @@
 +
 +
  def main() -> None:
-+    logging.basicConfig(level=logging.INFO, stream=sys.stderr)
++    logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
      parser = argparse.ArgumentParser(prog="framewise")
      sub = parser.add_subparsers(dest="command", required=True)
  

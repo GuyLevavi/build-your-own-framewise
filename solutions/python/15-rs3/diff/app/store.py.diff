@@ -1,0 +1,11 @@
+--- a/app/store.py
++++ b/app/store.py
+@@ -206,6 +206,8 @@
+                         updated_at=sa.func.now(),
+                     )
+                 )
++                # An earlier attempt may have stored part of its results: start clean.
++                conn.execute(sa.delete(db.detections).where(db.detections.c.job_id == row.id))
+                 return Job(
+                     row.id, row.video_id, row.profile, Status.RUNNING, None, None, row.attempts + 1
+                 )

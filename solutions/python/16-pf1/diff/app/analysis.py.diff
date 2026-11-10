@@ -1,0 +1,56 @@
+--- a/app/analysis.py
++++ b/app/analysis.py
+@@ -1,10 +1,13 @@
+ """Running the detector over a video, and turning sightings into segments."""
+ 
++import dataclasses
+ from collections.abc import Callable, Iterable, Iterator
+ from dataclasses import dataclass
+ from pathlib import Path
+ 
++import cv2
+ import fwdetect
++import numpy as np
+ 
+ from app.profiles import Profile
+ from app.video import frames, open_video
+@@ -20,6 +23,30 @@
+     boxes: list[fwdetect.Box]
+ 
+ 
++# fwdetect's cost grows with the pixels it gets and its accuracy doesn't, down to
++# its MIN_WIDTH: run it at this width and scale the boxes back.
++DETECT_WIDTH = 640
++
++
++def detect(frame: np.ndarray) -> list[fwdetect.Box]:
++    """fwdetect.detect, at no more than DETECT_WIDTH, in the frame's own coordinates."""
++    height, width = frame.shape[:2]
++    if width <= DETECT_WIDTH:
++        return fwdetect.detect(frame)
++    scale = width / DETECT_WIDTH
++    small = cv2.resize(frame, (DETECT_WIDTH, round(height / scale)), interpolation=cv2.INTER_AREA)
++    return [
++        dataclasses.replace(
++            box,
++            x=round(box.x * scale),
++            y=round(box.y * scale),
++            w=round(box.w * scale),
++            h=round(box.h * scale),
++        )
++        for box in fwdetect.detect(small)
++    ]
++
++
+ class Interrupted(Exception):
+     """The caller asked analysis to stop between frames."""
+ 
+@@ -32,7 +59,7 @@
+         for index, frame in frames(capture, profile.every):
+             if should_stop():
+                 raise Interrupted
+-            yield FrameResult(index, index / info.fps, fwdetect.detect(frame))
++            yield FrameResult(index, index / info.fps, detect(frame))
+ 
+ 
+ @dataclass
