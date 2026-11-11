@@ -184,7 +184,7 @@ stages:
     marketing_md: |-
       In this stage, you'll protect the API with a key, compared the way secrets should be.
 
-  # Ship it: Framewise weeks 3, 7, 8 and 9, checked on this machine with podman, helm and git
+  # Ship it: CI, image, pod, chart and release, checked on this machine with podman, helm and git
   - slug: "ci1"
     name: "Gate merges"
     difficulty: medium
