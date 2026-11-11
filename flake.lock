@@ -3,11 +3,11 @@
     "course": {
       "flake": false,
       "locked": {
-        "lastModified": 1794391886,
-        "narHash": "sha256-p8SPvfJZWZV4/rrfgVivntzOmLB7niknITMewFUt000=",
+        "lastModified": 1794395761,
+        "narHash": "sha256-gjCXUq9lbxKQqhcK69MJLRP2+GJ+hEggka0+kKUt70g=",
         "ref": "refs/heads/main",
-        "rev": "4909cf109250cd5f646f3c0059437f9e83845627",
-        "revCount": 11,
+        "rev": "dce9d7169f3b8fe1441ffebca1346426b7775fbe",
+        "revCount": 13,
         "type": "git",
         "url": "https://github.com/GuyLevavi/build-your-own-framewise"
       },
