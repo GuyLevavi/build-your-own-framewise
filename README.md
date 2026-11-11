@@ -135,7 +135,7 @@ passing.
 | Path | What |
 | --- | --- |
 | `test.sh`, `review.sh` | the learner's and the reviewer's entry points (Nix) |
-| `flake.nix` | the tester as `.#tester`; dev shells `python` (the attempt) and `default` (python + Go, for course work) |
+| `flake.nix`, `nix/python.nix` | the tester as `.#tester`; a dev shell per `nix/<lang>.nix` (`python`), and `default` (python + Go, for course work) |
 | `attempts/python/` | the learner's code: the starter plus `.stage`; `tools/start.sh <lang>` starts another language |
 | `tester/` | the tester: Go on CodeCrafters' tester-utils, `cmd/tester` and `internal/` (its own README) |
 | `course-definition.yml` | slugs, names and order of the stages |
@@ -171,3 +171,9 @@ tools/compile.sh                                      # after changing a solutio
 Clips are generated at run time, in Go (`tester/internal/scenes.go`); `make -C tester test`
 checks the numbers the stage texts quote. Rebuild the wheel after changing `fwdetect`
 (`uv build packages/fwdetect` and copy it into the starter's `vendor/`).
+
+## Local deviations from the starter
+
+None: `attempts/python` is `compiled_starters/python` plus `.stage`. The starter's
+`your_program.sh` already runs the Nix dev shell's Python when `FRAMEWISE_NIX_PYTHON` is set
+(`nix/python.nix`), and `uv run` everywhere else.

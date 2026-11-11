@@ -6,10 +6,16 @@
   outputs =
     { self, nixpkgs, ... }:
     let
-      forAllSystems = nixpkgs.lib.genAttrs [
+      lib = nixpkgs.lib;
+      forAllSystems = lib.genAttrs [
         "x86_64-linux"
         "aarch64-linux"
       ];
+      # One file per language in nix/: { pkgs }: { packages = [ ... ]; env = { ... }; }.
+      # build-your-own-y's tools/add-language writes them; ./test.sh <lang> runs in that shell.
+      languages = map (lib.removeSuffix ".nix") (
+        builtins.attrNames (lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".nix" n) (builtins.readDir ./nix))
+      );
     in
     {
       packages = forAllSystems (system: {
@@ -19,8 +25,9 @@
           src = ./tester;
           vendorHash = "sha256-Qimqsyrgew/5eRFhFQ0ckBY/eUJK1A/elB2939iuu+g=";
           subPackages = [ "cmd/tester" ];
-          # Its unit tests run in CI (.gitlab-ci.yml); ./test.sh is the check here.
+          # Its unit tests are `make -C tester test`; ./test.sh is the check here.
           doCheck = false;
+          env.CGO_ENABLED = 0;
         };
       });
 
@@ -28,71 +35,43 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          # The course's detector, built from packages/fwdetect.
-          fwdetect =
-            ps:
-            ps.buildPythonPackage {
-              pname = "fwdetect";
-              version = "0.1.0";
-              src = ./packages/fwdetect;
-              pyproject = true;
-              build-system = [ ps.hatchling ];
-              dependencies = [ ps.numpy ];
-              doCheck = false;
-            };
-          # attempts/python: what ./test.sh python runs in.
-          python = pkgs.mkShell {
-            packages = with pkgs; [
-              git
-              bash
-              # The dependencies of pyproject.toml, from nixpkgs: opencv-python's wheels
-              # don't run on NixOS. your_program.sh runs this Python when FRAMEWISE_NIX_PYTHON is set.
-              (python3.withPackages (
-                ps: with ps; [
-                  (fwdetect ps)
-                  alembic
-                  fastapi
-                  numpy
-                  opencv4
-                  prometheus-client
-                  psycopg
-                  pytest
-                  python-multipart
-                  pyyaml
-                  sqlalchemy
-                  uvicorn
-                ]
-              ))
-              uv
-              ruff
-              py-spy
-              # The delivery stages (ci1 to hm2) render the chart with helm. They also need podman,
-              # which comes from the system: rootless podman needs setuid helpers nix can't provide.
-              kubernetes-helm
-              # psql, and a local server if you want one (the tester can also start its own
-              # with podman, or use FRAMEWISE_TEST_DATABASE_URL).
-              postgresql
-            ];
-            PYTHONDONTWRITEBYTECODE = "1";
-            FRAMEWISE_NIX_PYTHON = "1";
-            # Read by test.sh.
-            FRAMEWISE_TESTER_BIN = "${self.packages.${system}.tester}/bin/tester";
-          };
+          # Read by test.sh. The course and the tester's source are this repo.
+          testerEnv.FRAMEWISE_TESTER_BIN = "${self.packages.${system}.tester}/bin/tester";
+          shellFor =
+            lang:
+            let
+              l = import ./nix/${lang}.nix { inherit pkgs; };
+            in
+            pkgs.mkShell (
+              {
+                packages = [
+                  pkgs.git
+                  pkgs.bash
+                ] ++ l.packages;
+              }
+              // (l.env or { })
+              // testerEnv
+              # test.sh re-enters the right shell unless it is already in it.
+              // { FRAMEWISE_SHELL = lang; }
+            );
+          shells = lib.genAttrs languages shellFor;
         in
-        {
-          inherit python;
-          # Working on the course: the python shell plus Go for the tester and course-sdk's tools.
-          default = pkgs.mkShell {
-            inputsFrom = [ python ];
-            packages = with pkgs; [
-              go
-              gopls
-              bun
-              gnumake
-            ];
-            inherit (python) PYTHONDONTWRITEBYTECODE FRAMEWISE_NIX_PYTHON FRAMEWISE_TESTER_BIN;
-            CGO_ENABLED = "0";
-          };
+        shells
+        // {
+          # Working on the course: every language, plus Go for the tester and bun for course-sdk.
+          default = pkgs.mkShell (
+            {
+              inputsFrom = builtins.attrValues shells;
+              packages = with pkgs; [
+                go
+                gopls
+                bun
+                gnumake
+              ];
+              CGO_ENABLED = "0";
+            }
+            // testerEnv
+          );
         }
       );
     };

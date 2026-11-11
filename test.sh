@@ -7,41 +7,59 @@
 #   ./test.sh [lang] --next         advance .stage to the following stage
 #   ./test.sh [lang] --show [slug]  print a stage's instructions (default: current)
 #
-# lang can be left out while attempts/ holds a single language. The tests run in the flake's
-# devShell for that language (nix develop .#<lang>), with the tester built from ./tester.
+# lang can be left out inside attempts/<lang>, or while attempts/ holds a single language.
+# The tests run in the flake's dev shell for that language (nix develop .#<lang>).
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")" && pwd)"
-course="$root/course-definition.yml"
 
-mapfile -t langs < <(cd "$root/attempts" && ls -d */ 2>/dev/null | tr -d /)
+# ---- challenge-specific (build-your-own-y PROTOCOL.md, "test.sh") ----------
+# The dev shell exports ${prefix}_SHELL (its language), ${prefix}_TESTER_BIN, and for a course
+# that lives elsewhere ${prefix}_COURSE_DIR and ${prefix}_TESTER_SRC (default: this repo and
+# its tester/).
+prefix=FRAMEWISE
+
+# Build up front with visible output so compile errors aren't buried in tester logs.
+# Runs in attempts/$lang.
+build() {
+  [[ ! -f .codecrafters/compile.sh ]] || sh .codecrafters/compile.sh
+}
+
+# Anything the tester needs beyond the CODECRAFTERS_* variables. Runs in attempts/$lang;
+# $here is that directory, TESTER_DIR defaults to the tester's source tree.
+prepare() {
+  :
+}
+# ---- end of challenge-specific part ------------------------------------------
+
+mapfile -t langs < <(cd "$root/attempts" 2>/dev/null && ls -d -- */ 2>/dev/null | tr -d /)
+cwd_lang="$(pwd -P)/"
+cwd_lang="${cwd_lang#"$(cd "$root" && pwd -P)/attempts/"}"
 if [[ -n "${1:-}" && -d "$root/attempts/$1" ]]; then
   lang="$1"
   shift
+elif [[ "$cwd_lang" != /* && -d "$root/attempts/${cwd_lang%%/*}" ]]; then
+  lang="${cwd_lang%%/*}"
 elif [[ ${#langs[@]} -eq 1 ]]; then
   lang="${langs[0]}"
 else
-  echo "which language? ./test.sh <lang> ..., one of: ${langs[*]:-(none; start one with tools/start.sh <lang>)}" >&2
+  echo "which language? ./test.sh <lang> ..., one of: ${langs[*]:-none yet, see tools/add-language in build-your-own-y}" >&2
   exit 2
 fi
 here="$root/attempts/$lang"
 stage_file="$here/.stage"
 
-# ---- per-language part -------------------------------------------------------
-# Build up front with visible output so compile errors aren't buried in tester logs.
-build() {
-  sh .codecrafters/compile.sh
-}
-# Anything the tester needs beyond the CODECRAFTERS_* variables.
-prepare() {
-  :
-}
-# ---- end of per-language part ------------------------------------------------
-
-# Toolchain and tester come from the devShell (pinned in flake.lock).
-if [[ -z "${FRAMEWISE_TESTER_BIN:-}" ]]; then
+tester_bin_var="${prefix}_TESTER_BIN"
+shell_var="${prefix}_SHELL"
+# Toolchain and tester come from the language's dev shell (pinned in flake.lock).
+if [[ "${!shell_var:-}" != "$lang" ]]; then
   exec nix develop "$root#$lang" --command "$0" "$lang" "$@"
 fi
+course_dir_var="${prefix}_COURSE_DIR"
+tester_src_var="${prefix}_TESTER_SRC"
+course_dir="${!course_dir_var:-$root}"
+course="$course_dir/course-definition.yml"
+TESTER_DIR="${!tester_src_var:-$root/tester}"
 
 # "slug<TAB>name" per stage, in course order.
 stages() {
@@ -71,7 +89,7 @@ case "${1:-}" in
     exit 0
     ;;
   --show)
-    desc=("$root"/stage_descriptions/*-"${2:-$current}".md)
+    desc=("$course_dir"/stage_descriptions/*-"${2:-$current}".md)
     [[ -f "${desc[0]}" ]] || { echo "no instructions for stage '${2:-$current}'" >&2; exit 1; }
     # render-markdown needs a .md filetype, and leaves the course's inline <code> HTML raw.
     md="$(mktemp --suffix=.md)"
@@ -88,7 +106,7 @@ case "${1:-}" in
     exit 0
     ;;
   -*)
-    sed -n '2,11s/^# \{0,1\}//p' "$0" >&2
+    sed -n '2,12s/^# \{0,1\}//p' "$0" >&2
     exit 2
     ;;
   "")
@@ -120,8 +138,8 @@ build
 prepare
 
 exec env \
-  TESTER_DIR="$root/tester" \
+  TESTER_DIR="$TESTER_DIR" \
   CODECRAFTERS_REPOSITORY_DIR="$here" \
   CODECRAFTERS_TEST_CASES_JSON="[$json]" \
   CODECRAFTERS_SKIP_ANTI_CHEAT=true \
-  "$FRAMEWISE_TESTER_BIN"
+  "${!tester_bin_var}"
