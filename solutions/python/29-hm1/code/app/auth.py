@@ -1,0 +1,28 @@
+"""API keys: every endpoint but the probes needs X-API-Key when FRAMEWISE_API_KEY is set."""
+
+import hmac
+from collections.abc import Awaitable, Callable
+
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
+
+# Kubernetes probes carry no key.
+OPEN_PATHS = {"/health", "/ready"}
+
+
+def require_api_key(app: FastAPI, key: str | None) -> None:
+    if not key:
+        return
+    expected = key.encode()
+
+    @app.middleware("http")
+    async def check_key(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        if request.url.path not in OPEN_PATHS:
+            given = request.headers.get("x-api-key", "").encode()
+            # compare_digest takes as long for a near miss as for a wild one,
+            # so response times don't leak how much of a guess was right.
+            if not hmac.compare_digest(given, expected):
+                return JSONResponse({"detail": "missing or wrong API key"}, status_code=401)
+        return await call_next(request)

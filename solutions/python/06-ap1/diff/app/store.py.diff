@@ -1,0 +1,40 @@
+--- a/app/store.py
++++ b/app/store.py
+@@ -0,0 +1,37 @@
++"""Where videos live: the repository the API talks to."""
++
++import threading
++import uuid
++from dataclasses import dataclass
++from typing import Any
++
++
++@dataclass(frozen=True)
++class Video:
++    id: str
++    filename: str
++    size_bytes: int
++    path: str
++
++    def public(self) -> dict[str, Any]:
++        return {"video_id": self.id, "filename": self.filename, "size_bytes": self.size_bytes}
++
++
++def new_id() -> str:
++    return uuid.uuid4().hex
++
++
++class Store:
++    """Videos in memory, behind a lock: request handlers run on several threads."""
++
++    def __init__(self) -> None:
++        self._lock = threading.Lock()
++        self._videos: dict[str, Video] = {}
++
++    def add_video(self, video: Video) -> None:
++        with self._lock:
++            self._videos[video.id] = video
++
++    def video(self, video_id: str) -> Video | None:
++        with self._lock:
++            return self._videos.get(video_id)

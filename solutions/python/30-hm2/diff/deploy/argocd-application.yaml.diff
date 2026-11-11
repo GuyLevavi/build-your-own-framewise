@@ -1,0 +1,26 @@
+--- a/deploy/argocd-application.yaml
++++ b/deploy/argocd-application.yaml
+@@ -0,0 +1,23 @@
++# The one object to hand devops: Argo CD syncs deploy/chart with values-nonprod.yaml into the
++# nonprod namespace. Start with manual sync (no syncPolicy.automated); once a manual sync works,
++# devops turns on automated sync with self-heal, as below.
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: framewise-nonprod
++  namespace: argocd
++spec:
++  project: default
++  source:
++    repoURL: https://gitlab.example.internal/team/framewise.git
++    targetRevision: main
++    path: deploy/chart
++    helm:
++      valueFiles: [values-nonprod.yaml]
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: framewise-nonprod
++  syncPolicy:
++    automated:
++      prune: true       # delete what was removed from Git
++      selfHeal: true    # undo hand edits in the cluster

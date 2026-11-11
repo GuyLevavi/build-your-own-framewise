@@ -3,8 +3,9 @@
 #
 #   tools/fast_track.sh STAGE_SLUG DIR
 #
-# DIR is your attempt (created from compiled_starters/python if missing). Its app/ is replaced by
-# the reference solution of the stage before STAGE_SLUG (the starter's, for the first stage), so
+# DIR is your attempt (created from compiled_starters/python if missing). Its app/ (and, for the
+# delivery stages, tests/, .gitlab-ci.yml, Containerfile, .containerignore and deploy/) is replaced
+# by the reference solution of the stage before STAGE_SLUG (the starter's, for the first stage), so
 # you can do just STAGE_SLUG, then compare with that stage's reference diff. Commit first if DIR
 # holds work you want to keep.
 set -euo pipefail
@@ -25,16 +26,21 @@ if [[ ! -d "$dir" ]]; then
   echo "created $dir from the starter"
 fi
 if [[ "$n" == 1 ]]; then
-  from="$course_dir/compiled_starters/python/app"
+  from="$course_dir/compiled_starters/python"
 else
-  from="$course_dir/solutions/python/$(printf %02d $((n - 1)))-${slugs[$((n - 2))]}/code/app"
+  from="$course_dir/solutions/python/$(printf %02d $((n - 1)))-${slugs[$((n - 2))]}/code"
 fi
-rm -rf "$dir/app"
-cp -r "$from" "$dir/app"
+# What the learner writes (the same list as tools/compile.sh).
+for name in app tests .gitlab-ci.yml Containerfile .containerignore deploy; do
+  if [[ -e "$from/$name" ]]; then
+    rm -rf "${dir:?}/$name"
+    cp -r "$from/$name" "$dir/$name"
+  fi
+done
 if [[ "$n" == 1 ]]; then
   echo "$dir/app is now the starter's"
 else
-  echo "$dir/app is now the reference solution of stage $((n - 1)) (${slugs[$((n - 2))]})"
+  echo "$dir now holds the reference solution of stage $((n - 1)) (${slugs[$((n - 2))]})"
 fi
 echo
 echo "Your stage:     $course_dir/stage_descriptions/base-$(printf %02d "$n")-$slug.md"

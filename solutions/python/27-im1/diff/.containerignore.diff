@@ -1,0 +1,15 @@
+--- a/.containerignore
++++ b/.containerignore
+@@ -0,0 +1,12 @@
++# The build context: only what the Containerfile copies needs to be here.
++.git
++.venv
++.uv-cache
++**/__pycache__
++.pytest_cache
++.ruff_cache
++tests
++deploy
++.env
++*.avi
++*.mp4

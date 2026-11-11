@@ -1,0 +1,16 @@
+# Applies the schema. Run it before the Deployments: helm upgrade --install, then wait for it.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-migrate-{{ .Values.image.tag | trunc 12 | trimSuffix "-" }}
+  labels: {{- include "framewise.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: {{ include "framewise.image" . }}
+          args: [migrate]
+          env: {{- include "framewise.env" . | nindent 12 }}

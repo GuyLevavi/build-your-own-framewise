@@ -11,7 +11,9 @@
 # Each unpacks to build-your-own-framewise/ and framewise-tester/ side by side, the layout
 # tools/run_tests.sh expects. The tester comes as a static linux/amd64 binary and as source with its
 # Go modules vendored, so it rebuilds offline. With IMAGES=1 the container images the tools use
-# are saved in too (images/*.tar; load them with `podman load -i`).
+# are saved in too (images/*.tar; load them with `podman load -i`). With HELM=/path/to/helm that
+# binary goes in as bin/helm, for the chart stages (hm1, hm2); take the static linux-amd64 build
+# from https://github.com/helm/helm/releases.
 #
 # Needs: git, go (with the tester's modules in its cache or network), and podman for IMAGES=1.
 set -euo pipefail
@@ -56,6 +58,10 @@ pack() {
       podman pull -q "$image" >/dev/null
       podman save -o "$stage/images/$(basename "${image//:/-}").tar" "$image"
     done
+  fi
+  if [[ -n "${HELM:-}" ]]; then
+    mkdir -p "$stage/bin"
+    cp "$HELM" "$stage/bin/helm"
   fi
   tar -czf "$out/$name-$rev.tar.gz" -C "$stage" .
   echo "$out/$name-$rev.tar.gz ($(du -h "$out/$name-$rev.tar.gz" | cut -f1))"
