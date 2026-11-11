@@ -29,6 +29,14 @@
           doCheck = false;
           env.CGO_ENABLED = 0;
         };
+        # A static helm for the airgap tarballs (tools/make_release.sh): nixpkgs' links glibc
+        # from the nix store, which the pod doesn't have.
+        helm = nixpkgs.legacyPackages.${system}.kubernetes-helm.overrideAttrs (old: {
+          env = (old.env or { }) // {
+            CGO_ENABLED = "0";
+          };
+          doCheck = false;
+        });
       });
 
       devShells = forAllSystems (

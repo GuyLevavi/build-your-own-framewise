@@ -73,10 +73,12 @@ twentyx pod, which has no podman, run them on a workstation.
 
 `tools/make_release.sh` builds two tarballs: one for the learner (no solutions) and one for the
 reviewer. Each holds the course, the tester as a static binary and as source with vendored Go
-modules, and with `IMAGES=1` the two container images (`postgres:18`,
-`ghcr.io/astral-sh/uv:python3.12-bookworm-slim`), and with `HELM=/path/to/helm` a static helm binary.
-Python dependencies come from the package index the network mirrors; `fwdetect` is vendored in the
-starter as a wheel.
+modules, every container image in `tools/images.env` (`images/load.sh` loads them into podman) and a
+static helm (`bin/helm`, the flake's `.#helm`). Run it from `nix develop` with podman on the machine;
+`IMAGES=0` or `HELM=` leave those out. The image names in `tools/images.env` are the defaults
+everywhere (the tester, `.gitlab-ci.yml`), so nothing needs setting on either side. Python
+dependencies come from the package index the network mirrors; `fwdetect` is vendored in the starter
+as a wheel.
 
 ## Stages
 
@@ -151,7 +153,9 @@ passing.
 | `tools/fast_track.sh` | the reviewer's fast track |
 | `tools/brief.py` | the reviewer's brief for a stage |
 | `tools/make_release.sh` | the airgap tarballs |
-| `.gitlab-ci.yml` | this repo's own pipeline: shell checks, `compile.sh` is clean, the tester's vet and unit tests, `verify_course.sh` |
+| `.github/workflows/ci.yml` | the checks on GitHub: generated files, briefs, the tester's tests, the flake and `./test.sh`, stages 1 to 5 (all 30 weekly) |
+| `tools/images.env` | the container images the course uses, by default |
+| `.gitlab-ci.yml` | the same pipeline for the airgapped GitLab: shell checks, `compile.sh` is clean, the tester's vet and unit tests, `verify_course.sh` |
 
 ## Checking the course itself
 
