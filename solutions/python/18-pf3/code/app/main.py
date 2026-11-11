@@ -45,7 +45,9 @@ def cmd_work(args: argparse.Namespace) -> None:
     from app.store import Store
     from app.worker import Worker, WorkerSettings
 
-    worker = Worker(Store(make_engine()), service_profiles(), WorkerSettings.from_env())
+    worker = Worker(
+        Store(make_engine(), service_events()), service_profiles(), WorkerSettings.from_env()
+    )
     # SIGTERM (a deploy, a scale-down) asks us to stop: finish the frame, give the job back, exit 0.
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: worker.stop.set())

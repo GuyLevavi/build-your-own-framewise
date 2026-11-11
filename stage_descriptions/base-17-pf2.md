@@ -11,7 +11,7 @@ More workers make more jobs finish per minute, but one long video is still analy
 
 ### Tests
 
-The tester runs a job on the 1080p clip with `FRAMEWISE_DETECT_PROCESSES=1`, then with N = min(CPUs, 4), sampling the memory of the worker's whole process group. It checks the speed-up, that the trace shows N different processes calling the detector, the memory limit, the row count in `results.detections`, and the detections between 8 and 10 s.
+This stage needs at least 2 CPUs; on fewer it fails and says so. The tester runs a job on the 1080p clip with `FRAMEWISE_DETECT_PROCESSES=1`, then with N = min(CPUs, 4), sampling the memory of the worker's whole process group. It checks the speed-up, that the trace shows N different processes calling the detector, the memory limit, the row count in `results.detections`, and the detections between 8 and 10 s.
 
 ### Why your design just broke
 

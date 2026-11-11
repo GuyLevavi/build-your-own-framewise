@@ -1,0 +1,22 @@
+--- a/app/db.py
++++ b/app/db.py
+@@ -41,6 +41,7 @@
+     sa.Column("lease_until", sa.DateTime(timezone=True)),
+     sa.Column("frames", sa.Integer),
+     sa.Column("analysis_s", sa.Float),
++    sa.Column("progress", sa.Float, nullable=False, server_default="0"),
+     sa.Column(
+         "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+     ),
+@@ -92,6 +93,11 @@
+     return url
+ 
+ 
++def libpq_url() -> str:
++    """DATABASE_URL as psycopg itself takes it, for connections outside SQLAlchemy."""
++    return database_url().replace("postgresql+psycopg://", "postgresql://", 1)
++
++
+ def make_engine() -> sa.Engine:
+     return sa.create_engine(database_url(), pool_pre_ping=True)
+ 

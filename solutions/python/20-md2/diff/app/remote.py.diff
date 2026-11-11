@@ -1,0 +1,106 @@
+--- a/app/remote.py
++++ b/app/remote.py
+@@ -1,15 +1,19 @@
+ """The detector on a model server: Triton's HTTP API (the KServe v2 protocol).
+ 
+ The model is a black box with a contract, read from the server rather than
+-assumed: its input size and pixel format. This module turns frames into
+-requests and answers back into boxes in the video's own coordinates.
++assumed: its input size and pixel format, its batch limit and how many
++requests it runs at once. This module turns frames into requests and answers
++back into boxes in the video's own coordinates.
+ """
+ 
+ import json
+ import urllib.error
+ import urllib.request
++from collections import deque
+ from collections.abc import Callable, Iterator
++from concurrent.futures import Future, ThreadPoolExecutor
+ from dataclasses import dataclass
++from itertools import batched
+ from pathlib import Path
+ 
+ import cv2
+@@ -33,6 +37,8 @@
+ class ModelInfo:
+     width: int
+     height: int
++    max_batch: int
++    instances: int
+ 
+ 
+ class ModelClient:
+@@ -41,11 +47,13 @@
+         self._info: ModelInfo | None = None
+ 
+     def info(self) -> ModelInfo:
+-        """The model's input size, from its metadata (asked once)."""
++        """The model's contract, from its metadata and config (asked once)."""
+         if self._info is None:
+-            metadata = self._send(urllib.request.Request(f"{self.url}/v2/models/{MODEL}"))
++            metadata = self._get(f"/v2/models/{MODEL}")
++            config = self._get(f"/v2/models/{MODEL}/config")
+             _, height, width, _ = metadata["inputs"][0]["shape"]
+-            self._info = ModelInfo(width, height)
++            instances = sum(group.get("count", 1) for group in config.get("instance_group", []))
++            self._info = ModelInfo(width, height, config["max_batch_size"], max(instances, 1))
+         return self._info
+ 
+     def detect(self, images: list[np.ndarray]) -> list[list[tuple[str, float, int, int, int, int]]]:
+@@ -85,6 +93,9 @@
+             for image in rows
+         ]
+ 
++    def _get(self, path: str) -> dict:
++        return self._send(urllib.request.Request(self.url + path))
++
+     def _send(self, request: urllib.request.Request) -> dict:
+         try:
+             with urllib.request.urlopen(request) as response:
+@@ -99,15 +110,38 @@
+ def remote_frames(
+     path: Path, profile: Profile, client: ModelClient, should_stop: Callable[[], bool]
+ ) -> Iterator[FrameResult]:
+-    """Every sampled frame's result, in order, from the model server, one frame a request."""
++    """Every sampled frame's result, in order, from the model server.
++
++    Frames go in batches as large as the model takes, with as many requests in
++    flight as it runs at once, plus one being filled. Reading waits while that
++    many are out: frames nobody can take yet would only pile up in memory.
++    """
+     info = client.info()
+-    with open_video(path) as (capture, video):
++    in_flight = info.instances + 1
++    with open_video(path) as (capture, video), ThreadPoolExecutor(in_flight) as pool:
+         scale_x, scale_y = video.width / info.width, video.height / info.height
+-        for index, frame in frames(capture, profile.every):
+-            if should_stop():
+-                raise Interrupted
+-            [boxes] = client.detect([_prepare(frame, info)])
+-            yield FrameResult(index, index / video.fps, [_box(b, scale_x, scale_y) for b in boxes])
++        pending: deque[tuple[list[int], Future]] = deque()
++
++        def collect() -> Iterator[FrameResult]:
++            indexes, future = pending.popleft()
++            for index, boxes in zip(indexes, future.result(), strict=True):
++                yield FrameResult(
++                    index, index / video.fps, [_box(b, scale_x, scale_y) for b in boxes]
++                )
++
++        try:
++            for chunk in batched(frames(capture, profile.every), info.max_batch):
++                if should_stop():
++                    raise Interrupted
++                images = [_prepare(frame, info) for _, frame in chunk]
++                pending.append(([index for index, _ in chunk], pool.submit(client.detect, images)))
++                if len(pending) >= in_flight:
++                    yield from collect()
++            while pending:
++                yield from collect()
++        finally:
++            for _, future in pending:
++                future.cancel()
+ 
+ 
+ def _prepare(frame: np.ndarray, info: ModelInfo) -> np.ndarray:
