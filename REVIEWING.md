@@ -6,13 +6,12 @@ yourself, and what to look for at each stage.
 
 ## The fast track
 
-You don't need to build all 30 stages to review them. Work in a solution repo, the way a learner
-does: [codecrafters-framewise-python](https://github.com/GuyLevavi/codecrafters-framewise-python)
-pins this course and the tester as flake inputs, like codecrafters-shell-c, so the tester comes
-with your attempt and `./test.sh` runs it. Then, for each stage:
+You don't need to build all 30 stages to review them. Work in `attempts/python/`, the way a
+learner does, on a branch of your own; `./test.sh` builds the tester from `tester/` and runs it.
+Then, for each stage:
 
 ```sh
-./review.sh wk3      # app/ becomes the reference solution of wk2, .stage becomes wk3, and the
+./review.sh wk3      # attempts/python/app becomes the reference solution of wk2, .stage becomes wk3, and the
                      # brief for wk3 opens (below)
 ./test.sh            # fails on wk3: this is what the learner sees
 # implement it yourself, or at least sketch it; then ./test.sh again, and compare:

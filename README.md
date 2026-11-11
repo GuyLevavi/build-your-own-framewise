@@ -13,16 +13,35 @@ the GIL, a trace file for the tester, and a frame that crashes the process on pu
 is in everything around it. Each stage is chosen so the previous design breaks and has to be
 refactored; the stage text says why, under "Why your design just broke".
 
-Layout copied from [codecrafters-io/build-your-own-http-server](https://github.com/codecrafters-io/build-your-own-http-server);
-the tester is [framewise-tester](https://github.com/GuyLevavi/framewise-tester) (clone it next to this repo).
-Both are MIT; see `LICENSE` for CodeCrafters' notice. Learners with Nix can work in
-[codecrafters-framewise-python](https://github.com/GuyLevavi/codecrafters-framewise-python), which pins both
-as flake inputs (the protocol of [build-your-own-y](https://github.com/GuyLevavi/build-your-own-y)).
+Everything is in this one repo: the course, its tester (`tester/`) and the learner's attempt
+(`attempts/python/`). The course layout is copied from
+[codecrafters-io/build-your-own-http-server](https://github.com/codecrafters-io/build-your-own-http-server)
+and the tester's from their tester-template; both are MIT, see `LICENSE` for CodeCrafters' notice.
+It follows the one-repo protocol of [build-your-own-y](https://github.com/GuyLevavi/build-your-own-y).
 
-## Try it as a learner
+## Do the course
+
+With Nix (and direnv, or `nix develop`):
 
 ```sh
-cp -r compiled_starters/python ~/fw-attempt                         # your repo; start in app/main.py
+git clone https://github.com/GuyLevavi/build-your-own-framewise && cd build-your-own-framewise
+./test.sh                # every stage up to the one in attempts/python/.stage
+./test.sh --show         # the current stage's instructions; ./test.sh --show pb2 for any stage
+./test.sh --next         # move .stage on once it passes
+./test.sh pb2            # one stage
+./test.sh --list         # every stage, * on the current one
+```
+
+Your code is `attempts/python/` (start in `app/main.py`); commit it on your own branch. `./test.sh`
+enters the `python` dev shell (Python and every dependency from nixpkgs, ruff, py-spy, psql, helm),
+builds the tester from `tester/` and runs it the way CodeCrafters does. Podman comes from the system.
+The tester stops at the first failing stage.
+
+Without Nix (the twentyx pod, or any machine with uv or podman), run the tester against any copy of
+the starter:
+
+```sh
+cp -r compiled_starters/python ~/fw-attempt                         # or use attempts/python
 FRAMEWISE_RUNNER=native tools/run_tests.sh ~/fw-attempt pb1        # stage 1, with uv on this machine
 tools/run_tests.sh ~/fw-attempt wk2                                 # stages 1..10, in a container
 tools/run_tests.sh ~/fw-attempt ap3 --only                          # just one stage
@@ -54,10 +73,12 @@ twentyx pod, which has no podman, run them on a workstation.
 
 `tools/make_release.sh` builds two tarballs: one for the learner (no solutions) and one for the
 reviewer. Each holds the course, the tester as a static binary and as source with vendored Go
-modules, and with `IMAGES=1` the two container images (`postgres:18`,
-`ghcr.io/astral-sh/uv:python3.12-bookworm-slim`), and with `HELM=/path/to/helm` a static helm binary.
-Python dependencies come from the package index the network mirrors; `fwdetect` is vendored in the
-starter as a wheel.
+modules, every container image in `tools/images.env` (`images/load.sh` loads them into podman) and a
+static helm (`bin/helm`, the flake's `.#helm`). Run it from `nix develop` with podman on the machine;
+`IMAGES=0` or `HELM=` leave those out. The image names in `tools/images.env` are the defaults
+everywhere (the tester, `.gitlab-ci.yml`), so nothing needs setting on either side. Python
+dependencies come from the package index the network mirrors; `fwdetect` is vendored in the starter
+as a wheel.
 
 ## Stages
 
@@ -106,8 +127,8 @@ commit. The assignment covers the rest.
 
 ## Reviewing
 
-`REVIEWING.md` has the reviewer's fast track (`tools/fast_track.sh` starts any stage from the
-previous reference solution), the per-stage brief (`tools/brief.py`: the task, what the reference
+`REVIEWING.md` has the reviewer's fast track (`./review.sh <slug>` starts any stage in
+`attempts/python` from the previous reference solution), the per-stage brief (`tools/brief.py`: the task, what the reference
 built, what to review and what the stage points to) and what to look for in each stage beyond
 passing.
 
@@ -115,6 +136,10 @@ passing.
 
 | Path | What |
 | --- | --- |
+| `test.sh`, `review.sh` | the learner's and the reviewer's entry points (Nix) |
+| `flake.nix`, `nix/python.nix` | the tester as `.#tester`; a dev shell per `nix/<lang>.nix` (`python`), and `default` (python + Go, for course work) |
+| `attempts/python/` | the learner's code: the starter plus `.stage`; `tools/start.sh <lang>` starts another language |
+| `tester/` | the tester: Go on CodeCrafters' tester-utils, `cmd/tester` and `internal/` (its own README) |
 | `course-definition.yml` | slugs, names and order of the stages |
 | `stage_descriptions/` | one Markdown file per stage: task, expected behaviour, tests, the refactor, pointers |
 | `starter_templates/` | the source of the starter; `compiled_starters/python` is generated from it |
@@ -122,18 +147,20 @@ passing.
 | `solutions/python/NN-slug/diff` | what that stage changed in the learner's files (`app/`, and from ci1 `tests/`, `.gitlab-ci.yml`, `Containerfile`, `deploy/`) |
 | `packages/fwdetect/` | the detector, built into the wheel in `starter_templates/python/code/vendor/` |
 | `dockerfiles/python-3.12.Dockerfile` | the image programs run in (container mode) |
-| `tools/run_tests.sh` | run the tester against one directory |
+| `tools/run_tests.sh` | run the tester against one directory, without Nix |
 | `tools/verify_course.sh` | prove every stage: solution N passes 1..N, solution N-1 fails stage N |
 | `tools/compile.sh` | regenerate the compiled starter, the solutions' boilerplate and the diffs |
 | `tools/fast_track.sh` | the reviewer's fast track |
 | `tools/brief.py` | the reviewer's brief for a stage |
 | `tools/make_release.sh` | the airgap tarballs |
-| `.gitlab-ci.yml` | this repo's own pipeline: shell checks, `compile.sh` is clean, `verify_course.sh` |
+| `.github/workflows/ci.yml` | the checks on GitHub: generated files, briefs, the tester's tests, the flake and `./test.sh`, stages 1 to 5 (all 30 weekly) |
+| `tools/images.env` | the container images the course uses, by default |
+| `.gitlab-ci.yml` | the same pipeline for the airgapped GitLab: shell checks, `compile.sh` is clean, the tester's vet and unit tests, `verify_course.sh` |
 
 ## Checking the course itself
 
 ```sh
-make -C ../framewise-tester build
+make -C tester build
 FRAMEWISE_RUNNER=native tools/verify_course.sh        # all stages; logs in tools/.verify/
 FRAMEWISE_RUNNER=native tools/verify_course.sh 9 15   # a range
 tools/compile.sh                                      # after changing a solution or the starter
@@ -141,10 +168,16 @@ tools/compile.sh                                      # after changing a solutio
 
 ## Changing a stage
 
-1. Edit `stage_descriptions/base-NN-slug.md` and the test in `../framewise-tester/internal/stages_*.go`.
+1. Edit `stage_descriptions/base-NN-slug.md` and the test in `tester/internal/stages_*.go`.
 2. Update `solutions/python/NN-slug/code/app/` (and the later stages that build on it), then `tools/compile.sh`.
-3. `make -C ../framewise-tester copy_course_file build && tools/verify_course.sh NN NN`.
+3. `make -C tester copy_course_file build && tools/verify_course.sh NN NN`.
 
-Clips are generated at run time, in Go (`../framewise-tester/internal/scenes.go`); `make test` there
+Clips are generated at run time, in Go (`tester/internal/scenes.go`); `make -C tester test`
 checks the numbers the stage texts quote. Rebuild the wheel after changing `fwdetect`
 (`uv build packages/fwdetect` and copy it into the starter's `vendor/`).
+
+## Local deviations from the starter
+
+None: `attempts/python` is `compiled_starters/python` plus `.stage`. The starter's
+`your_program.sh` already runs the Nix dev shell's Python when `FRAMEWISE_NIX_PYTHON` is set
+(`nix/python.nix`), and `uv run` everywhere else.

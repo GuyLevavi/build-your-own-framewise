@@ -1,0 +1,86 @@
+# The course's checks on GitHub. The airgapped network runs .gitlab-ci.yml instead; the two check
+# the same things.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * 1" # the full course proof, weekly
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: generated files are up to date
+        run: |
+          tools/compile.sh
+          git diff --exit-code --stat || { echo "Run tools/compile.sh and commit the result"; exit 1; }
+      - name: scripts parse, every brief renders, one text and one solution per stage
+        run: |
+          for f in tools/*.sh test.sh review.sh; do bash -n "$f"; done
+          for s in $(awk '/^stages:/{s=1} s && /^  - slug:/{gsub(/"/,"",$3); print $3}' course-definition.yml); do python3 tools/brief.py "$s" >/dev/null; done
+          stages=$(awk '/^stages:/{s=1} s && /^  - slug:/' course-definition.yml | wc -l)
+          test "$stages" = "$(ls stage_descriptions | wc -l)"
+          test "$stages" = "$(ls -d solutions/python/*/ | wc -l)"
+          for v in CI_IMAGE GO_IMAGE; do grep -q "^  $v: $(sed -n "s/^$v=\([^ ]*\).*/\1/p" tools/images.env)$" .gitlab-ci.yml || { echo "$v differs from tools/images.env"; exit 1; }; done
+
+  tester:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tester
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tester/go.mod
+          cache-dependency-path: tester/go.sum
+      - run: cmp ../course-definition.yml internal/test_helpers/course_definition.yml || { echo "Run make -C tester copy_course_file"; exit 1; }
+      - run: test -z "$(gofmt -l cmd internal/*.go)" || { gofmt -l cmd internal/*.go; exit 1; }
+      - run: go vet ./...
+      - run: go test -count=1 ./...
+
+  # The learner's way in: the flake builds, and ./test.sh fails stage 1 on the starter.
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - run: nix build --no-link .#tester .#helm
+      - run: |
+          ./test.sh --list | head -3
+          if ./test.sh pb1; then echo "the starter passes stage 1"; exit 1; fi
+
+  # Solution N passes 1..N and solution N-1 fails N: the first five stages on every change, all
+  # thirty weekly (the database stages start Postgres with podman, which the runner has).
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      FRAMEWISE_RUNNER: native
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tester/go.mod
+          cache-dependency-path: tester/go.sum
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: make -C tester build
+      - if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        run: tools/verify_course.sh 1 5
+      - if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: tools/verify_course.sh
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-logs
+          path: tools/.verify/

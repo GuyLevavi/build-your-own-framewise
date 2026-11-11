@@ -6,3 +6,5 @@ __pycache__/
 packages/fwdetect/dist/
 packages/fwdetect/uv.lock
 /dist/
+.direnv/
+result

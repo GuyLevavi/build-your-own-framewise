@@ -2,17 +2,24 @@
 # stage is sound (verify_course.sh: solution N passes 1..N, solution N-1 fails stage N) runs when
 # solutions, stages or tools change, and on a schedule.
 #
-# Project variables (Settings > CI/CD > Variables):
-#   CI_IMAGE         an image with bash, git, diffutils and python3 (the uv CI image will do)
-#   TESTER_REPO_URL  the framewise-tester repository on this GitLab, without credentials,
-#                    e.g. https://gitlab.example.internal/team/framewise-tester.git
-#   FRAMEWISE_TEST_DATABASE_URL  optional: a Postgres the tester may create databases on;
-#                    unset, the tester starts its own with podman
+# Nothing needs setting: the images default to tools/images.env's (the airgap tarball carries
+# them; load them into the registry the runners pull from), and the tester's Go modules come from
+# tester/vendor when it is there (the tarball has it), else from GOPROXY. Optional project
+# variables (Settings > CI/CD > Variables) override:
+#   CI_IMAGE, GO_IMAGE   the job images, e.g. the same images in a local registry
+#   GOPROXY              the Go module mirror the network allows, when there is no tester/vendor
+#   FRAMEWISE_TEST_DATABASE_URL  a Postgres the tester may create databases on; unset, the
+#                        tester starts its own with podman
 # The verify job needs a runner tagged `podman`: a shell executor on a machine like the learners'
 # workstation, with podman, helm, git, go and the course images loaded (postgres:18 and
 # ghcr.io/astral-sh/uv:python3.12-bookworm-slim, from the airgap tarball).
 
 stages: [check, verify]
+
+# Defaults; keep them in step with tools/images.env (the scripts job checks).
+variables:
+  CI_IMAGE: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+  GO_IMAGE: docker.io/library/golang:1.24-bookworm
 
 workflow:
   rules:
@@ -40,19 +47,44 @@ scripts:
     - stages=$(awk '/^stages:/{s=1} s && /^  - slug:/' course-definition.yml | wc -l)
     - test "$stages" = "$(ls stage_descriptions | wc -l)"
     - test "$stages" = "$(ls -d solutions/python/*/ | wc -l)"
+    # The CI image defaults match tools/images.env.
+    - for v in CI_IMAGE GO_IMAGE; do grep -q "^  $v: $(sed -n "s/^$v=\([^ ]*\).*/\1/p" tools/images.env)$" .gitlab-ci.yml || { echo "$v differs from tools/images.env"; exit 1; }; done
+
+# The tester (tester/): formatting, vet, and its unit tests (stages against the course definition,
+# clips against the numbers the stage descriptions quote).
+.go:
+  image: ${GO_IMAGE}
+  variables:
+    CGO_ENABLED: "0"
+    GOTOOLCHAIN: local             # never download a toolchain
+    GOPATH: ${CI_PROJECT_DIR}/.go  # inside the project, so the runner can cache modules
+    GOCACHE: ${CI_PROJECT_DIR}/.go-build
+  cache:
+    key:
+      files: [tester/go.sum]
+    paths: [.go/pkg/mod, .go-build]
+
+tester:
+  extends: .go
+  stage: check
+  script:
+    - cd tester
+    - if [ -d vendor ]; then export GOFLAGS=-mod=vendor; fi
+    # The tester's copy of the course definition must be the course's.
+    - cmp ../course-definition.yml internal/test_helpers/course_definition.yml || (echo "Run make -C tester copy_course_file and commit the result" && exit 1)
+    - test -z "$(gofmt -l cmd internal/*.go)" || (gofmt -l cmd internal/*.go && exit 1)
+    - go vet ./...
+    - go test -count=1 ./...
 
 verify:
   stage: verify
   tags: [podman]
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
-    - changes: [solutions/**/*, stage_descriptions/**/*, course-definition.yml, tools/**/*, dockerfiles/**/*, compiled_starters/**/*, starter_templates/**/*]
+    - changes: [solutions/**/*, stage_descriptions/**/*, course-definition.yml, tools/**/*, dockerfiles/**/*, compiled_starters/**/*, starter_templates/**/*, tester/**/*]
   timeout: 3h
   before_script:
-    # The tester lives in its own repo; run_tests.sh expects it next to this one.
-    - rm -rf ../framewise-tester
-    - git clone --depth 1 "https://gitlab-ci-token:${CI_JOB_TOKEN}@${TESTER_REPO_URL#https://}" ../framewise-tester
-    - make -C ../framewise-tester build
+    - make -C tester build
   script:
     - tools/verify_course.sh
   artifacts:
