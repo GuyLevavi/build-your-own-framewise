@@ -17,16 +17,29 @@ type profile struct {
 	every   int
 	maxGapS float64
 	labels  []string
+	model   string // "" is the detector, yolo26n
 }
 
 var allLabels = []string{"person", "car", "bicycle"}
 
+func (p profile) modelName() string {
+	if p.model == "" {
+		return detectModel
+	}
+	return p.model
+}
+
 // expectedLabels is what analyzing s with p must report: for each label p
-// keeps that appears in a sampled frame, its presence segments.
+// keeps that appears in a sampled frame (as a detection, or as the classifier's
+// top class), its presence segments.
 func expectedLabels(s scene, p profile) map[string][]segment {
 	want := map[string][]segment{}
 	for _, label := range p.labels {
-		if segs := groupFrames(s.presenceFrames(label, p.every), s.fps, p.maxGapS); len(segs) > 0 {
+		frames := s.presenceFrames(label, p.every)
+		if p.modelName() == classifyModel {
+			frames = s.classFrames(label, p.every)
+		}
+		if segs := groupFrames(frames, s.fps, p.maxGapS); len(segs) > 0 {
 			want[label] = segs
 		}
 	}
@@ -93,23 +106,29 @@ func compareLabels(got, want map[string][]segment, fps int) error {
 	return nil
 }
 
-// A trace is the file fwdetect appends a line to on every call when
-// FWDETECT_TRACE names it.
+// A trace is the file the tester's hook appends a line to on every model
+// call in the learner's processes, when FRAMEWISE_TRACE names it.
 type trace struct{ path string }
 
+// traceLine is one frame the model ran on: the hook logs a call on a batch of n
+// as n lines here.
 type traceLine struct {
 	PID   int     `json:"pid"`
 	T     float64 `json:"t"`
+	Model string  `json:"model"`
+	N     int     `json:"n"`
 	W     int     `json:"w"`
 	H     int     `json:"h"`
-	Boxes [][]any `json:"boxes"`
 }
 
 func newTrace(harness *test_case_harness.TestCaseHarness) trace {
-	return trace{filepath.Join(tempDir(harness), "fwdetect-trace.jsonl")}
+	return trace{filepath.Join(tempDir(harness), "model-trace.jsonl")}
 }
 
-// lines returns every call so far; no file means no calls.
+// env is what a program needs in its environment to log to this trace.
+func (t trace) env() map[string]string { return map[string]string{"FRAMEWISE_TRACE": t.path} }
+
+// lines returns every frame the model ran on so far, one line each; no file means none.
 func (t trace) lines() ([]traceLine, error) {
 	f, err := os.Open(t.path)
 	if os.IsNotExist(err) {
@@ -125,11 +144,26 @@ func (t trace) lines() ([]traceLine, error) {
 	for scanner.Scan() {
 		var line traceLine
 		if err := json.Unmarshal(scanner.Bytes(), &line); err != nil {
-			return nil, fmt.Errorf("CodeCrafters Internal Error: bad fwdetect trace line %q", scanner.Text())
+			return nil, fmt.Errorf("CodeCrafters Internal Error: bad trace line %q", scanner.Text())
 		}
-		result = append(result, line)
+		n := max(line.N, 1)
+		line.N = 1
+		for range n {
+			result = append(result, line)
+		}
 	}
 	return result, scanner.Err()
+}
+
+// of keeps the lines of one model.
+func of(lines []traceLine, model string) []traceLine {
+	var result []traceLine
+	for _, l := range lines {
+		if l.Model == model {
+			result = append(result, l)
+		}
+	}
+	return result
 }
 
 func (t trace) reset() { os.Remove(t.path) }

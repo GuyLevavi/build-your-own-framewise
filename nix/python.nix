@@ -1,29 +1,15 @@
 # The dev shell for attempts/python (./test.sh python, nix develop .#python).
 { pkgs }:
-let
-  # The course's detector, built from packages/fwdetect.
-  fwdetect =
-    ps:
-    ps.buildPythonPackage {
-      pname = "fwdetect";
-      version = "0.1.0";
-      src = ../packages/fwdetect;
-      pyproject = true;
-      build-system = [ ps.hatchling ];
-      dependencies = [ ps.numpy ];
-      doCheck = false;
-    };
-in
 {
   packages = with pkgs; [
     # The dependencies of pyproject.toml, from nixpkgs: opencv-python's wheels don't run on
     # NixOS. your_program.sh runs this Python when FRAMEWISE_NIX_PYTHON is set.
     (python3.withPackages (
       ps: with ps; [
-        (fwdetect ps)
         alembic
         fastapi
         numpy
+        onnxruntime
         opencv4
         prometheus-client
         psycopg
@@ -31,6 +17,8 @@ in
         python-multipart
         pyyaml
         sqlalchemy
+        # Runs the .pt models in models/, and brings PyTorch (nixpkgs' is CPU-only).
+        ultralytics
         uvicorn
       ]
     ))

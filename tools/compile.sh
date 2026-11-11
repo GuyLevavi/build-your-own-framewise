@@ -3,7 +3,8 @@
 #   compiled_starters/python   from starter_templates/{all,python}/code
 #   solutions/python/*/code    the compiled starter's files around each solution's own files
 #                              (app/, and from ci1 on tests/, .gitlab-ci.yml, Containerfile,
-#                              .containerignore and deploy/)
+#                              .containerignore and deploy/); models/ is a symlink to the
+#                              starter's, so the models are in the checkout once
 #   solutions/python/*/diff    each stage's changes to those files against the previous stage
 #
 #   tools/compile.sh
@@ -46,7 +47,8 @@ previous="$starter"
 for solution in solutions/python/*/; do
   code="$solution/code"
   find "$code" -mindepth 1 -maxdepth 1 "${keep[@]}" -exec rm -rf {} +
-  (cd "$starter" && find . -mindepth 1 -maxdepth 1 ! -name app -exec cp -a {} "$course_dir/$code/" \;)
+  (cd "$starter" && find . -mindepth 1 -maxdepth 1 ! -name app ! -name models -exec cp -a {} "$course_dir/$code/" \;)
+  ln -s ../../../../compiled_starters/python/models "$code/models"
   rm -rf "$solution/diff"
   mkdir -p "$solution/diff"
   (cd "$code" && for name in "${own[@]}"; do if [[ -e "$name" ]]; then find "$name" -type f ! -name '*.pyc' ! -path '*/__pycache__/*'; fi; done | sort) | while read -r file; do

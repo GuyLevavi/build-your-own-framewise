@@ -14,9 +14,17 @@ import (
 
 // expectedBoxes lists every box the default profile stores for s in frames [from, to].
 func expectedBoxes(s scene, from, to int) []box {
+	return expectedBoxesEvery(s, from, to, 1)
+}
+
+// expectedBoxesEvery lists the boxes a profile sampling every `every` frames
+// (and keeping every label) stores for s in frames [from, to].
+func expectedBoxesEvery(s scene, from, to, every int) []box {
 	var result []box
 	for i := from; i <= to && i < s.frames; i++ {
-		result = append(result, s.boxesAt(i)...)
+		if i%every == 0 {
+			result = append(result, s.boxesAt(i)...)
+		}
 	}
 	return result
 }
@@ -53,21 +61,24 @@ func detectionsField(object map[string]any) ([]storedBox, error) {
 				return nil, fmt.Errorf("detections[%d]: %v", i, err)
 			}
 		}
-		result = append(result, storedBox{t, box{label, int(xywh[0]), int(xywh[1]), int(xywh[2]), int(xywh[3])}})
+		result = append(result, storedBox{t, box{Label: label, X: int(xywh[0]), Y: int(xywh[1]), W: int(xywh[2]), H: int(xywh[3])}})
 	}
 	return result, nil
 }
 
-func sameBox(a, b box, tolerance int) bool {
-	return a.Label == b.Label && abs(a.X-b.X) <= tolerance && abs(a.Y-b.Y) <= tolerance && abs(a.W-b.W) <= tolerance && abs(a.H-b.H) <= tolerance
+// sameBox: same label, and boxes that overlap by at least minIoU (intersection over union).
+// The model's boxes move a few pixels with how you resize a frame for it, so
+// exact positions can't be expected.
+func sameBox(a, b box, minIoU float64) bool {
+	return a.Label == b.Label && a.iou(b) >= minIoU
 }
 
 // compareDetections checks got against frames [from, to] of s, in order of time then label.
 func compareDetections(got []storedBox, s scene, from, to int) error {
-	return compareDetectionsWithin(got, s, from, to, 2)
+	return compareDetectionsWithin(got, s, from, to, 0.85)
 }
 
-func compareDetectionsWithin(got []storedBox, s scene, from, to, tolerance int) error {
+func compareDetectionsWithin(got []storedBox, s scene, from, to int, minIoU float64) error {
 	var want []storedBox
 	for i := from; i <= to && i < s.frames; i++ {
 		boxes := s.boxesAt(i)
@@ -80,8 +91,8 @@ func compareDetectionsWithin(got []storedBox, s scene, from, to, tolerance int) 
 		return fmt.Errorf("expected %d detections, got %d", len(want), len(got))
 	}
 	for i := range want {
-		if math.Abs(got[i].t-want[i].t) > 1e-3 || !sameBox(got[i].box, want[i].box, tolerance) {
-			return fmt.Errorf("expected detection %d (sorted by t_s, then label) to be %s, got %s (positions within %d px)", i, want[i], got[i], tolerance)
+		if math.Abs(got[i].t-want[i].t) > 1e-3 || !sameBox(got[i].box, want[i].box, minIoU) {
+			return fmt.Errorf("expected detection %d (sorted by t_s, then label) to be %s, got %s (IoU at least %.2f)", i, want[i], got[i], minIoU)
 		}
 	}
 	return nil
@@ -349,7 +360,7 @@ func writeEvents(harness *test_case_harness.TestCaseHarness) string {
 
 func testRetries(harness *test_case_harness.TestCaseHarness) error {
 	tr := newTrace(harness)
-	extra := map[string]string{"FWDETECT_TRACE": tr.path, "FRAMEWISE_EVENTS": writeEvents(harness)}
+	extra := map[string]string{"FRAMEWISE_TRACE": tr.path, "FRAMEWISE_EVENTS": writeEvents(harness)}
 	for k, v := range crashEnv {
 		extra[k] = v
 	}
@@ -366,7 +377,7 @@ func testRetries(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	jobID, _, err := sv.submitJob(longID, "")
+	jobID, _, err := sv.submitJob(longID, "sparse")
 	if err != nil {
 		return err
 	}
@@ -377,7 +388,7 @@ func testRetries(harness *test_case_harness.TestCaseHarness) error {
 		if err != nil {
 			return err
 		}
-		if n > 100 {
+		if n > 50 {
 			harness.Logger.Successf("✓ %d rows so far", n)
 			break
 		}
@@ -391,14 +402,14 @@ func testRetries(harness *test_case_harness.TestCaseHarness) error {
 		return err
 	}
 	w.kill()
-	if _, err := sv.expectJobDone(jobID, sceneLong, defaultProfile); err != nil {
+	if _, err := sv.expectJobDone(jobID, sceneLong, sparseProfile); err != nil {
 		return err
 	}
 	n, err := detectionCount(dbURL, jobID)
 	if err != nil {
 		return err
 	}
-	if want := len(expectedBoxes(sceneLong, 0, sceneLong.frames-1)); n != int64(want) {
+	if want := len(expectedBoxesEvery(sceneLong, 0, sceneLong.frames-1, sparseProfile.every)); n != int64(want) {
 		return fmt.Errorf("expected exactly %d rows in results.detections for the job after its retry, found %d. The first attempt's rows must not be counted twice", want, n)
 	}
 	harness.Logger.Successf("✓ exactly %d rows after the retry", n)

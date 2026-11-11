@@ -8,20 +8,27 @@ import (
 	"github.com/codecrafters-io/tester-utils/test_case_harness"
 )
 
-// From md1 the profiles file has a profile that runs the detector on the model server.
-const remoteProfilesYAML = testProfilesYAML + `  remote:
+// From md1 the profiles file has profiles that run the model on the model server.
+const remoteProfilesYAML = perfProfilesYAML + `  remote:
     every: 1
     max_gap_s: 0.5
     labels: [person, car, bicycle]
+    detector: remote
+  parked_remote:
+    every: 2
+    max_gap_s: 0.5
+    model: yolo26n-cls
+    labels: [sports_car, convertible]
     detector: remote
 `
 
 const remoteProfile = "remote"
 
-// modelStage starts a model server at width x height and prepares a database
-// and environment whose profiles include "remote".
-func modelStage(harness *test_case_harness.TestCaseHarness, width, height int, extra map[string]string) (string, map[string]string, *modelServer, error) {
-	model, err := startModelServer(harness, width, height)
+// modelStage starts a model server whose yolo26n takes size x size images and
+// prepares a database and environment whose profiles include "remote".
+func modelStage(harness *test_case_harness.TestCaseHarness, size int, extra map[string]string) (string, map[string]string, *modelServer, error) {
+	harness.Logger.Infof("Starting a model server (it runs your models/*.onnx with onnxruntime)")
+	model, err := startModelServer(harness, size)
 	if err != nil {
 		return "", nil, nil, err
 	}
@@ -36,31 +43,20 @@ func modelStage(harness *test_case_harness.TestCaseHarness, width, height int, e
 	if err != nil {
 		return "", nil, nil, err
 	}
-	harness.Logger.Infof("A model server is at FRAMEWISE_MODEL_URL: model %q, input images [-1, %d, %d, 3] (GET /v2/models/%s)", modelName, height, width, modelName)
+	harness.Logger.Infof("A model server is at FRAMEWISE_MODEL_URL: models %q (input images [-1, 3, %d, %d]) and %q (GET /v2/models/<name>/config)", detectModel, size, size, classifyModel)
 	return dbURL, env, model, nil
 }
 
-// expectRemoteDone is expectJobDone, with a hint when person and car came back swapped.
+// expectRemoteDone is expectJobDone, with a hint when the boxes or labels look
+// like the frame went to the model in the wrong layout or colour order.
 func (sv *service) expectRemoteDone(jobID string, sc scene) (map[string]any, error) {
 	job, err := sv.expectJobDone(jobID, sc, defaultProfile)
 	if err == nil {
 		return job, nil
 	}
 	if r, rerr := sv.get("/jobs/"+jobID, nil); rerr == nil && r.object != nil {
-		if got, lerr := labelsField(r.object, "labels"); lerr == nil {
-			swapped := map[string][]segment{}
-			for label, segs := range got {
-				switch label {
-				case "person":
-					label = "car"
-				case "car":
-					label = "person"
-				}
-				swapped[label] = segs
-			}
-			if len(got) > 0 && compareLabels(swapped, expectedLabels(sc, defaultProfile), sc.fps) == nil {
-				return nil, fmt.Errorf("%v. Person and car are swapped: the model reads RGB, and OpenCV gives you BGR", err)
-			}
+		if got, lerr := labelsField(r.object, "labels"); lerr == nil && len(got) == 0 {
+			return nil, fmt.Errorf("%v. The model found nothing: check the input's layout (N, 3, H, W), its scale (0 to 1) and the order of its colours (RGB; OpenCV gives you BGR)", err)
 		}
 	}
 	return nil, err
@@ -77,10 +73,10 @@ func (sv *service) workerAlive(what string) error {
 }
 
 func testRemoteDetector(harness *test_case_harness.TestCaseHarness) error {
-	sizes := [][2]int{{512, 288}, {768, 432}}
+	sizes := []int{512, 640}
 	size := sizes[random.RandomInt(0, len(sizes))]
 	tr := newTrace(harness)
-	dbURL, env, model, err := modelStage(harness, size[0], size[1], map[string]string{"FWDETECT_TRACE": tr.path})
+	dbURL, env, model, err := modelStage(harness, size, tr.env())
 	if err != nil {
 		return err
 	}
@@ -103,14 +99,14 @@ func testRemoteDetector(harness *test_case_harness.TestCaseHarness) error {
 		return err
 	}
 	if calls, _ := tr.lines(); len(calls) > 0 {
-		return fmt.Errorf("expected the remote profile to run the detector on the model server only, but fwdetect ran %d times in your processes", len(calls))
+		return fmt.Errorf("expected the remote profile to run the model on the model server only, but it ran on %d frames in your processes", len(calls))
 	}
 	stats := model.snapshot()
 	want := sampledFrames(sceneStreet, defaultProfile)
-	if stats.frames != want {
+	if stats.framesBy[detectModel] != want {
 		return fmt.Errorf("expected the model server to get each of the %d frames once, it answered %d frames in %d requests (%d rejected)", want, stats.frames, stats.requests, stats.rejected)
 	}
-	harness.Logger.Successf("✓ the model server analyzed all %d frames, in %d requests; fwdetect didn't run locally", stats.frames, stats.ok)
+	harness.Logger.Successf("✓ the model server analyzed all %d frames, in %d requests; the model didn't run in your processes", stats.frames, stats.ok)
 	r, err := sv.get(fmt.Sprintf("/jobs/%s/detections?from_s=2&to_s=4", jobID), nil)
 	if err != nil {
 		return err
@@ -119,8 +115,8 @@ func testRemoteDetector(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	if err := compareDetectionsWithin(got, sceneStreet, 20, 40, 3); err != nil {
-		return fmt.Errorf("%v. The model answers in the pixels of its own input (%dx%d); store boxes in the video's", err, size[0], size[1])
+	if err := compareDetectionsWithin(got, sceneStreet, 20, 40, 0.8); err != nil {
+		return fmt.Errorf("%v. The model answers in the pixels of its own input (%dx%d, letterboxed); store boxes in the video's", err, size, size)
 	}
 	harness.Logger.Successf("✓ %d detections between 2 and 4 s, in the video's coordinates", len(got))
 
@@ -137,7 +133,7 @@ func testRemoteDetector(harness *test_case_harness.TestCaseHarness) error {
 	if _, err := sv.expectRemoteDone(hdJob, sceneHD); err != nil {
 		return err
 	}
-	if err := expectDetectionsWithin(sv, hdJob, sceneHD, 8, 10, 8); err != nil {
+	if err := expectDetectionsWithin(sv, hdJob, sceneHD, 8, 10, 0.8); err != nil {
 		return err
 	}
 	count, err := detectionCount(dbURL, hdJob)
@@ -148,7 +144,26 @@ func testRemoteDetector(harness *test_case_harness.TestCaseHarness) error {
 		return fmt.Errorf("expected %d rows in results.detections for the job, found %d", want, count)
 	}
 
-	harness.Logger.Infof("The default profile still runs fwdetect in your worker")
+	harness.Logger.Infof("A job with the parked_remote profile (%s on the model server) on the parked clip", classifyModel)
+	parkedID, err := sv.uploadClip("parked.avi", sceneParked.bytes())
+	if err != nil {
+		return err
+	}
+	model.resetStats()
+	parkedJob, _, err := sv.submitJob(parkedID, "parked_remote")
+	if err != nil {
+		return err
+	}
+	parked := profile{every: 2, maxGapS: 0.5, labels: []string{"sports_car", "convertible"}, model: classifyModel}
+	if _, err := sv.expectJobDone(parkedJob, sceneParked, parked); err != nil {
+		return fmt.Errorf("%v. %s takes %dx%d images, resized (not letterboxed) from the middle of the frame: see models/README.md", err, classifyModel, classifySize, classifySize)
+	}
+	if st := model.snapshot(); st.framesBy[classifyModel] != sampledFrames(sceneParked, parked) {
+		return fmt.Errorf("expected the model server to classify each of the %d sampled frames once, it classified %d", sampledFrames(sceneParked, parked), st.framesBy[classifyModel])
+	}
+	harness.Logger.Successf("✓ classified on the model server")
+
+	harness.Logger.Infof("The default profile still runs the model in your worker")
 	tr.reset()
 	model.resetStats()
 	localJob, _, err := sv.submitJob(streetID, "")
@@ -160,34 +175,41 @@ func testRemoteDetector(harness *test_case_harness.TestCaseHarness) error {
 	}
 	calls, _ := tr.lines()
 	if len(calls) != want || model.snapshot().requests > 0 {
-		return fmt.Errorf("expected the default profile to run fwdetect locally (%d calls) and not call the model server; fwdetect ran %d times and the model server got %d requests. The detector is a setting of the profile", want, len(calls), model.snapshot().requests)
+		return fmt.Errorf("expected the default profile to run the model locally (%d frames) and not call the model server; it ran on %d frames locally and the model server got %d requests. Where the model runs is a setting of the profile", want, len(calls), model.snapshot().requests)
 	}
-	harness.Logger.Successf("✓ fwdetect ran %d times locally; the model server wasn't called", len(calls))
+	harness.Logger.Successf("✓ the model ran on %d frames locally; the model server wasn't called", len(calls))
 	return nil
 }
 
-// md2's model: every request costs 100 ms plus 2 ms a frame, and two run at once.
+// md2's model server: every request costs batchLatency on top of running the
+// model, and two run at once. The target is a multiple of what sending one
+// frame at a time could reach, measured on this machine before the job.
 const (
-	batchLatency   = 100 * time.Millisecond
-	batchPerFrame  = 2 * time.Millisecond
+	batchLatency   = 300 * time.Millisecond
 	batchMax       = 16
 	batchInstances = 2
-	batchTargetFPS = 160.0
-	batchMemoryMiB = 250
+	batchSpeedup   = 5.0
+	batchMemoryMiB = 400
 )
 
 func testBatching(harness *test_case_harness.TestCaseHarness) error {
-	dbURL, env, model, err := modelStage(harness, 640, 360, nil)
+	dbURL, env, model, err := modelStage(harness, 640, nil)
 	if err != nil {
 		return err
 	}
-	model.set(batchMax, batchInstances, batchLatency, batchPerFrame)
-	harness.Logger.Infof("Each request to the model costs %s plus %s a frame; its config allows batches of %d and %d requests at once", batchLatency, batchPerFrame, batchMax, batchInstances)
+	model.set(batchMax, batchInstances, batchLatency, 0)
+	one, err := model.calibrate()
+	if err != nil {
+		return err
+	}
+	single := 1 / (batchLatency + one).Seconds()
+	target := batchSpeedup * single
+	harness.Logger.Infof("Each request to the model costs %s plus running it (%.0f ms for one frame on this machine); its config allows batches of %d and %d requests at once. One frame at a time would make %.1f frames/s; the target is %.1f", batchLatency, float64(one.Milliseconds()), batchMax, batchInstances, single, target)
 	sv, err := startService(harness, tempDir(harness), env, 1, false)
 	if err != nil {
 		return err
 	}
-	longID, err := sv.uploadClip("long_street.avi", sceneLong.bytes())
+	hdID, err := sv.uploadClip("hd_street.avi", sceneHD.bytes())
 	if err != nil {
 		return err
 	}
@@ -198,11 +220,11 @@ func testBatching(harness *test_case_harness.TestCaseHarness) error {
 	harness.Logger.Infof("The idle worker uses %.0f MiB; the limit while it works is %.0f MiB", mib(idle), mib(limit))
 
 	model.resetStats()
-	jobID, _, err := sv.submitJob(longID, remoteProfile)
+	jobID, _, err := sv.submitJob(hdID, remoteProfile)
 	if err != nil {
 		return err
 	}
-	harness.Logger.Infof("A job with the remote profile on the 10-minute clip (%d frames)", sceneLong.frames)
+	harness.Logger.Infof("A job with the remote profile on the 1080p clip (%d frames)", sceneHD.frames)
 	rss := sampleRSS(w.pid)
 	started := time.Now()
 	for {
@@ -224,23 +246,23 @@ func testBatching(harness *test_case_harness.TestCaseHarness) error {
 		}
 		// Too slow to make it: say why now rather than after minutes.
 		if elapsed := time.Since(started); elapsed > 20*time.Second {
-			if st := model.snapshot(); st.rate() < batchTargetFPS/2 || elapsed > 150*time.Second {
+			if st := model.snapshot(); st.rate() < target/2 || elapsed > 150*time.Second {
 				rss.finish()
-				return fmt.Errorf("expected at least %.0f frames/s from the model server; after %.0f s it's %.0f (%d frames). %s", batchTargetFPS, elapsed.Seconds(), st.rate(), st.frames, batchHint(st))
+				return fmt.Errorf("expected at least %.1f frames/s from the model server; after %.0f s it's %.1f (%d frames). %s", target, elapsed.Seconds(), st.rate(), st.frames, batchHint(st))
 			}
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
 	peak, at := rss.finish()
-	if _, err := sv.expectRemoteDone(jobID, sceneLong); err != nil {
+	if _, err := sv.expectRemoteDone(jobID, sceneHD); err != nil {
 		return err
 	}
 	s := model.snapshot()
-	harness.Logger.Infof("%.0f frames/s; %.1f frames a request on average; at most %d requests at once; the worker peaked at %.0f MiB", s.rate(), s.meanBatch(), s.maxInFlight, mib(peak))
-	if s.rate() < batchTargetFPS {
-		return fmt.Errorf("expected at least %.0f frames/s from the model server, got %.0f. %s", batchTargetFPS, s.rate(), batchHint(s))
+	harness.Logger.Infof("%.1f frames/s; %.1f frames a request on average; at most %d requests at once; the worker peaked at %.0f MiB", s.rate(), s.meanBatch(), s.maxInFlight, mib(peak))
+	if s.rate() < target {
+		return fmt.Errorf("expected at least %.1f frames/s from the model server (%.0fx one frame at a time), got %.1f. %s", target, batchSpeedup, s.rate(), batchHint(s))
 	}
-	harness.Logger.Successf("✓ %.0f frames/s (target %.0f)", s.rate(), batchTargetFPS)
+	harness.Logger.Successf("✓ %.1f frames/s (target %.1f)", s.rate(), target)
 	if peak > limit {
 		return fmt.Errorf("expected the worker to stay under %.0f MiB (idle plus %d MiB), it peaked at %.0f MiB after %.1f s. Frames waiting for the model take memory; bound how many are read ahead", mib(limit), batchMemoryMiB, mib(peak), at.Seconds())
 	}
@@ -249,7 +271,7 @@ func testBatching(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	if want := len(expectedBoxes(sceneLong, 0, sceneLong.frames-1)); count != int64(want) {
+	if want := len(expectedBoxes(sceneHD, 0, sceneHD.frames-1)); count != int64(want) {
 		return fmt.Errorf("expected %d rows in results.detections for the job, found %d", want, count)
 	}
 	harness.Logger.Successf("✓ %d rows in results.detections", count)
@@ -271,7 +293,7 @@ func testModelFailures(harness *test_case_harness.TestCaseHarness) error {
 	for k, v := range crashEnv {
 		extra[k] = v
 	}
-	dbURL, env, model, err := modelStage(harness, 640, 360, extra)
+	dbURL, env, model, err := modelStage(harness, 640, extra)
 	if err != nil {
 		return err
 	}

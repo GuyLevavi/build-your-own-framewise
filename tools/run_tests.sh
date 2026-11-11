@@ -83,18 +83,30 @@ if [[ -n "$until" && -z "$found" ]]; then
   exit 2
 fi
 
+# The reference solutions link models/ to the starter's (tools/compile.sh): run them from a copy
+# that has the files, as a learner's repository does, so containers and image builds see them.
+if [[ -L "$code_dir/models" ]]; then
+  staged="$(mktemp -d)"
+  trap 'rm -rf "$staged"' EXIT
+  cp -a "$code_dir/." "$staged/"
+  rm "$staged/models"
+  cp -rL "$code_dir/models" "$staged/models"
+  code_dir="$staged"
+fi
+
 if [[ "${FRAMEWISE_RUNNER:-container}" == native ]]; then
   # One virtualenv per dependency set, outside CODE_DIR, so solutions stay clean.
   deps_hash="$(cat "$code_dir/pyproject.toml" "$code_dir/uv.lock" | sha256sum | cut -c1-12)"
   export UV_PROJECT_ENVIRONMENT="${XDG_CACHE_HOME:-$HOME/.cache}/framewise/venv-$deps_hash"
   cd "$code_dir"
-  exec env \
+  env \
     TESTER_DIR="$tester_dir" \
     PYTHONDONTWRITEBYTECODE=1 \
     CODECRAFTERS_REPOSITORY_DIR="$code_dir" \
     CODECRAFTERS_TEST_CASES_JSON="$json" \
     CODECRAFTERS_RANDOM_SEED="${CODECRAFTERS_RANDOM_SEED:-}" \
     "$tester_dir/tester"
+  exit
 fi
 
 # The delivery stages, with the tester on this machine.
@@ -118,11 +130,11 @@ engine="$(command -v podman || command -v docker)"
 
 # The image holds only the dependencies, keyed by the dependency files, so code changes need no rebuild.
 dockerfile="$(ls "$course_dir"/dockerfiles/python-*.Dockerfile | sort -V | tail -1)"
-deps_hash="$(cat "$dockerfile" "$code_dir/pyproject.toml" "$code_dir/uv.lock" "$code_dir"/vendor/* | sha256sum | cut -c1-12)"
+deps_hash="$(cat "$dockerfile" "$code_dir/pyproject.toml" "$code_dir/uv.lock" | sha256sum | cut -c1-12)"
 image="framewise-deps:$deps_hash"
 if ! "$engine" image exists "$image" 2>/dev/null; then
   context="$(mktemp -d)"
-  cp -r "$code_dir/pyproject.toml" "$code_dir/uv.lock" "$code_dir/vendor" "$context/"
+  cp -r "$code_dir/pyproject.toml" "$code_dir/uv.lock" "$context/"
   [[ -f "$code_dir/.python-version" ]] && cp "$code_dir/.python-version" "$context/"
   echo "Building $image (dependencies only; cached until pyproject.toml or uv.lock change) ..."
   "$engine" build -q -t "$image" -f "$dockerfile" "$context" >/dev/null

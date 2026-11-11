@@ -56,7 +56,7 @@ func testSeparateWorker(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	longJob, _, err := sv.submitJob(longID, "")
+	longJob, _, err := sv.submitJob(longID, "sparse")
 	if err != nil {
 		return err
 	}
@@ -74,13 +74,13 @@ func testSeparateWorker(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.expectJobDone(longJob, sceneLong, defaultProfile)
+	_, err = s.expectJobDone(longJob, sceneLong, sparseProfile)
 	return err
 }
 
 func testManyWorkers(harness *test_case_harness.TestCaseHarness) error {
 	tr := newTrace(harness)
-	dbURL, env, err := workerStage(harness, map[string]string{"FWDETECT_TRACE": tr.path})
+	dbURL, env, err := workerStage(harness, tr.env())
 	if err != nil {
 		return err
 	}
@@ -173,7 +173,7 @@ func intOf(job map[string]any, key string) int64 {
 
 func testCrashedWorkers(harness *test_case_harness.TestCaseHarness) error {
 	tr := newTrace(harness)
-	extra := map[string]string{"FWDETECT_TRACE": tr.path}
+	extra := tr.env()
 	for k, v := range crashEnv {
 		extra[k] = v
 	}
@@ -232,7 +232,7 @@ func testCrashedWorkers(harness *test_case_harness.TestCaseHarness) error {
 
 func testGracefulShutdown(harness *test_case_harness.TestCaseHarness) error {
 	tr := newTrace(harness)
-	_, env, err := workerStage(harness, map[string]string{"FWDETECT_TRACE": tr.path, "FRAMEWISE_LEASE_S": "60"})
+	_, env, err := workerStage(harness, map[string]string{"FRAMEWISE_TRACE": tr.path, "FRAMEWISE_LEASE_S": "60"})
 	if err != nil {
 		return err
 	}
@@ -244,7 +244,7 @@ func testGracefulShutdown(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	jobID, _, err := sv.submitJob(longID, "")
+	jobID, _, err := sv.submitJob(longID, "sparse")
 	if err != nil {
 		return err
 	}
@@ -275,6 +275,6 @@ func testGracefulShutdown(harness *test_case_harness.TestCaseHarness) error {
 	if _, err := sv.addWorker(); err != nil {
 		return err
 	}
-	_, err = sv.expectJobDone(jobID, sceneLong, defaultProfile)
+	_, err = sv.expectJobDone(jobID, sceneLong, sparseProfile)
 	return err
 }

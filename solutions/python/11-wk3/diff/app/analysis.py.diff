@@ -1,6 +1,6 @@
 --- a/app/analysis.py
 +++ b/app/analysis.py
-@@ -1,11 +1,10 @@
+@@ -1,12 +1,11 @@
 -"""Turning detector output into when each label was present."""
 +"""Running the detector over a video, and turning sightings into segments."""
  
@@ -9,11 +9,13 @@
  from dataclasses import dataclass
  from pathlib import Path
  
- import fwdetect
 -import numpy as np
++import fwdetect
  
+-from app.model import detect
  from app.profiles import Profile
  from app.video import frames, open_video
+ 
 @@ -14,6 +13,28 @@
  Labels = dict[str, list[Segment]]
  
@@ -48,7 +50,7 @@
  
  
 -def detect_labels(frame: np.ndarray) -> set[str]:
--    return {box.label for box in fwdetect.detect(frame)}
+-    return {box.label for box in detect(frame)}
 -
 -
  def analyze(path: Path, profile: Profile) -> Labels:

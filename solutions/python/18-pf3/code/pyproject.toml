@@ -3,18 +3,20 @@ name = "codecrafters-framewise"
 version = "0.1.0"
 requires-python = ">=3.12"
 # Everything the course needs is here from the start, as on the team's air-gapped machines:
-# a new package must be mirrored first, so ask before adding one.
+# a new package must be mirrored first, so ask before adding one. ultralytics runs the .pt
+# models (and brings PyTorch); onnxruntime runs the .onnx ones.
 dependencies = [
     "alembic>=1.13",
     "fastapi>=0.110",
-    "fwdetect",
     "numpy>=1.26,<2.3",
+    "onnxruntime>=1.20",
     "opencv-python-headless>=4.9",
     "prometheus-client>=0.20",
     "psycopg[binary]>=3.1",
     "python-multipart>=0.0.9",
     "pyyaml>=6.0",
     "sqlalchemy>=2.0",
+    "ultralytics>=8.4,<8.5",
     "uvicorn>=0.29",
 ]
 
@@ -25,10 +27,9 @@ profile = ["py-spy>=0.3", "scalene>=1.5"]
 
 [tool.uv]
 default-groups = ["dev"]
-
-[tool.uv.sources]
-# The detector ships with the course as a wheel; it is not on any public index.
-fwdetect = { path = "vendor/fwdetect-0.1.0-py3-none-any.whl" }
+# Ultralytics asks for opencv-python, which needs a desktop's libGL; the headless build above
+# provides the same cv2 without it, so leave the other one out.
+override-dependencies = ["opencv-python; sys_platform == 'never'"]
 
 [tool.ruff]
 line-length = 100

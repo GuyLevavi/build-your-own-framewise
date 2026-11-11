@@ -4,9 +4,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-import fwdetect
 import numpy as np
 
+from app.model import detect
 from app.profiles import Profile
 from app.video import frames, open_video
 
@@ -37,7 +37,7 @@ def presence(sightings: Iterable[tuple[float, set[str]]], profile: Profile) -> L
 
 
 def detect_labels(frame: np.ndarray) -> set[str]:
-    return {box.label for box in fwdetect.detect(frame)}
+    return {box.label for box in detect(frame)}
 
 
 def analyze(path: Path, profile: Profile) -> Labels:

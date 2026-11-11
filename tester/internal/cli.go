@@ -5,5 +5,6 @@ import (
 )
 
 func RunCLI(env map[string]string) int {
+	defer installHook()()
 	return testerutils.RunCLI(env, testerDefinition)
 }

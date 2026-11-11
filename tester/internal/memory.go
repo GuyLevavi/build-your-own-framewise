@@ -10,9 +10,13 @@ import (
 	"time"
 )
 
-// groupRSS is the resident memory, in bytes, of every process in process
-// group pgid: the program and everything it started (the tester starts each
-// program in a group of its own). Processes that vanish while it reads are skipped.
+// groupRSS is the memory, in bytes, of every process in process group pgid:
+// the program and everything it started (the tester starts each program in a
+// group of its own). Each process counts its proportional set size (PSS):
+// pages it shares with others, such as the model runtime's libraries in every
+// process of a pool, are split between them rather than counted once each.
+// Where the kernel doesn't report PSS it is the resident set (VmRSS).
+// Processes that vanish while it reads are skipped.
 func groupRSS(pgid int) int64 {
 	entries, _ := os.ReadDir("/proc")
 	var total int64
@@ -34,12 +38,16 @@ func groupRSS(pgid int) int64 {
 		if len(fields) < 3 || fields[2] != strconv.Itoa(pgid) {
 			continue
 		}
-		status, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "status"))
+		key := "Pss:"
+		status, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "smaps_rollup"))
 		if err != nil {
-			continue
+			key = "VmRSS:"
+			if status, err = os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "status")); err != nil {
+				continue
+			}
 		}
 		for _, line := range strings.Split(string(status), "\n") {
-			if strings.HasPrefix(line, "VmRSS:") {
+			if strings.HasPrefix(line, key) {
 				f := strings.Fields(line)
 				if len(f) >= 2 {
 					kb, _ := strconv.ParseInt(f[1], 10, 64)

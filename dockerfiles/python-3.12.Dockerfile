@@ -2,7 +2,7 @@
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 # Ensures the container is re-built if dependency files change
-ENV CODECRAFTERS_DEPENDENCY_FILE_PATHS="pyproject.toml,uv.lock,vendor"
+ENV CODECRAFTERS_DEPENDENCY_FILE_PATHS="pyproject.toml,uv.lock"
 
 # Prevents Python from buffering stdout and stderr
 ENV PYTHONUNBUFFERED=1
@@ -16,7 +16,6 @@ WORKDIR /app
 
 # Install dependencies first, so code changes reuse this layer
 COPY pyproject.toml uv.lock /app/
-COPY vendor /app/vendor
 RUN uv sync --locked --no-install-project
 
 # .git & README.md are unique per-repository. We ignore them on first copy to prevent cache misses

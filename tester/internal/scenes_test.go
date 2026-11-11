@@ -3,7 +3,6 @@ package internal
 import (
 	"bytes"
 	"encoding/binary"
-	"image"
 	"image/jpeg"
 	"math"
 	"os"
@@ -15,20 +14,66 @@ func TestScenesFollowTheRules(t *testing.T) {
 	for _, s := range allScenes {
 		for i := range s.frames {
 			seen := map[string]bool{}
-			for _, b := range s.boxesAt(i) {
+			for _, o := range s.objects {
+				b, ok := o.placedAt(i)
+				if !ok {
+					continue
+				}
 				if seen[b.Label] {
-					t.Fatalf("%s frame %d: two %s boxes", s.name, i, b.Label)
+					t.Fatalf("%s frame %d: two %s objects", s.name, i, b.Label)
 				}
 				seen[b.Label] = true
 				if b.X < 0 || b.Y < 0 || b.X+b.W > s.width || b.Y+b.H > s.height {
 					t.Fatalf("%s frame %d: %v leaves the frame", s.name, i, b)
 				}
-				if _, ok := labelChannels[b.Label]; !ok {
-					t.Fatalf("%s: unknown label %q", s.name, b.Label)
-				}
 			}
 		}
 	}
+}
+
+// The golden files agree with the scenes: the model finds every object where
+// it was drawn, finds nothing that wasn't drawn, and the classifier names the
+// parked car only while it is there.
+func TestGoldenMatchesScenes(t *testing.T) {
+	for _, s := range allScenes {
+		for i := range s.frames {
+			placed := map[string]box{}
+			if !s.isPoison(i) {
+				for _, o := range s.objects {
+					if b, ok := o.placedAt(i); ok {
+						placed[b.Label] = b
+					}
+				}
+			}
+			found := map[string]box{}
+			for _, b := range s.boxesAt(i) {
+				found[b.Label] = b
+			}
+			if len(found) != len(placed) {
+				t.Fatalf("%s frame %d: the model finds %v, the scene has %v", s.name, i, found, placed)
+			}
+			for label, p := range placed {
+				f, ok := found[label]
+				if !ok || f.iou(p) < 0.5 {
+					t.Fatalf("%s frame %d: %s drawn at %v, found at %v", s.name, i, label, p, f)
+				}
+			}
+			class, ok := s.classAt(i)
+			_, parked := placedLabel(s, i, "car")
+			if s.name == "parked" && (ok != parked || (ok && class != "sports_car")) {
+				t.Fatalf("parked frame %d: the classifier says %q (%v), the car is there: %v", i, class, ok, parked)
+			}
+		}
+	}
+}
+
+func placedLabel(s scene, i int, label string) (box, bool) {
+	for _, o := range s.objects {
+		if b, ok := o.placedAt(i); ok && b.Label == label {
+			return b, true
+		}
+	}
+	return box{}, false
 }
 
 // The stage texts will quote these numbers; keep them and the scenes in step.
@@ -40,11 +85,12 @@ func TestSceneNumbers(t *testing.T) {
 	}{
 		{"street person", groupFrames(sceneStreet.presenceFrames("person", 1), 10, 0.5), []segment{{1.0, 8.0}}},
 		{"street car", groupFrames(sceneStreet.presenceFrames("car", 1), 10, 0.5), []segment{{4.0, 11.0}}},
-		{"street person+car", groupFrames(sceneStreet.overlapFrames("person", "car", 1), 10, 0.5), []segment{{5.3, 6.6}}},
+		{"street person+car", groupFrames(sceneStreet.overlapFrames("person", "car", 1), 10, 0.5), []segment{{4.8, 7.1}}},
 		{"street person, every 5th frame", groupFrames(sceneStreet.presenceFrames("person", 5), 10, 0.5), []segment{{1.0, 8.0}}},
 		{"poison person", groupFrames(scenePoison.presenceFrames("person", 1), 10, 0.5), []segment{{0.0, 5.9}}},
-		{"hd person", groupFrames(sceneHD.presenceFrames("person", 1), 25, 0.5), []segment{{1.0, 19.0}}},
-		{"hd person+car", groupFrames(sceneHD.overlapFrames("person", "car", 1), 25, 0.5), []segment{{9.04, 12.32}}},
+		{"hd person", groupFrames(sceneHD.presenceFrames("person", 1), 10, 0.5), []segment{{1.0, 19.0}}},
+		{"hd person+car", groupFrames(sceneHD.overlapFrames("person", "car", 1), 10, 0.5), []segment{{7.7, 13.0}}},
+		{"parked sports_car", groupFrames(sceneParked.classFrames("sports_car", 1), 10, 0.5), []segment{{2.0, 5.9}}},
 	}
 	for _, tc := range cases {
 		if !sameSegments(tc.got, tc.expect) {
@@ -52,11 +98,11 @@ func TestSceneNumbers(t *testing.T) {
 		}
 	}
 
-	long := groupFrames(sceneLong.presenceFrames("person", 1), 10, 0.5)
+	long := groupFrames(sceneLong.presenceFrames("person", 1), 5, 0.5)
 	if len(long) != 10 || !sameSegments(long[:1], []segment{{10, 20}}) || !sameSegments(long[9:], []segment{{550, 560}}) {
 		t.Errorf("long person: got %s", formatSegments(long))
 	}
-	if cars := groupFrames(sceneLong.presenceFrames("car", 1), 10, 0.5); len(cars) != 5 {
+	if cars := groupFrames(sceneLong.presenceFrames("car", 1), 5, 0.5); len(cars) != 5 {
 		t.Errorf("long car: got %s", formatSegments(cars))
 	}
 	if o := sceneLong.overlapFrames("person", "car", 1); len(o) != 0 {
@@ -79,70 +125,24 @@ func sameSegments(a, b []segment) bool {
 	return true
 }
 
-// Decode every scene's frames the way fwdetect sees them (JPEG, so colours
-// blur at the edges) and check that thresholding each label's channel gives
-// its box back within 2 pixels, and that poison frames stay uniform grey.
+// Every scene's AVI holds the frames it should, and poison frames stay uniform grey after JPEG.
 func TestScenesSurviveJPEG(t *testing.T) {
 	for _, s := range allScenes {
 		frames := aviFrames(t, s.bytes())
 		if len(frames) != s.frames {
 			t.Fatalf("%s: %d frames in the AVI, want %d", s.name, len(frames), s.frames)
 		}
-		step := max(1, s.frames/40)
-		for i := 0; i < s.frames; i += step {
+		for _, i := range s.poison {
 			img, err := jpeg.Decode(bytes.NewReader(frames[i]))
 			if err != nil {
 				t.Fatalf("%s frame %d: %v", s.name, i, err)
 			}
-			if s.isPoison(i) {
-				r, g, b, _ := img.At(s.width/2, s.height/2).RGBA()
-				if d := int(r>>8) - poisonGrey; d < -3 || d > 3 || r != g || g != b {
-					t.Fatalf("%s frame %d: poison frame is not uniform grey", s.name, i)
-				}
-				continue
-			}
-			want := map[string]box{}
-			for _, b := range s.boxesAt(i) {
-				want[b.Label] = b
-			}
-			for label, ch := range labelChannels {
-				got, ok := thresholdBox(img, ch)
-				w, present := want[label]
-				if ok != present {
-					t.Fatalf("%s frame %d: %s found=%v, want %v", s.name, i, label, ok, present)
-				}
-				if ok && (abs(got.X-w.X) > 2 || abs(got.Y-w.Y) > 2 || abs(got.W-w.W) > 2 || abs(got.H-w.H) > 2) {
-					t.Fatalf("%s frame %d: %s box %v after JPEG, want %v", s.name, i, label, got, w)
-				}
+			r, g, b, _ := img.At(s.width/2, s.height/2).RGBA()
+			if d := int(r>>8) - poisonGrey; d < -3 || d > 3 || r != g || g != b {
+				t.Fatalf("%s frame %d: poison frame is not uniform grey", s.name, i)
 			}
 		}
 	}
-}
-
-// thresholdBox is the bounding box of the pixels whose label channel is
-// above 160: fwdetect's own rule.
-func thresholdBox(img image.Image, ch [3]uint8) (box, bool) {
-	c := 0
-	for k := range 3 {
-		if ch[k] > 0 {
-			c = k
-		}
-	}
-	b := img.Bounds()
-	x0, y0, x1, y1 := b.Max.X, b.Max.Y, -1, -1
-	for y := b.Min.Y; y < b.Max.Y; y++ {
-		for x := b.Min.X; x < b.Max.X; x++ {
-			r, g, bl, _ := img.At(x, y).RGBA()
-			v := [3]uint32{r >> 8, g >> 8, bl >> 8}[c]
-			if v > 160 {
-				x0, y0, x1, y1 = min(x0, x), min(y0, y), max(x1, x), max(y1, y)
-			}
-		}
-	}
-	if x1 < 0 {
-		return box{}, false
-	}
-	return box{X: x0, Y: y0, W: x1 - x0 + 1, H: y1 - y0 + 1}, true
 }
 
 // aviFrames reads the JPEGs back out of an AVI's movi list, in order.
@@ -165,7 +165,7 @@ func aviFrames(t *testing.T, data []byte) [][]byte {
 }
 
 // FRAMEWISE_DUMP_SCENES=<dir> go test -run TestDumpScenes ./internal writes
-// every scene to dir, so the course repo can check fwdetect against them.
+// every scene to dir, so tester/golden/make_golden.py can run the model on them.
 func TestDumpScenes(t *testing.T) {
 	dir := os.Getenv("FRAMEWISE_DUMP_SCENES")
 	if dir == "" {
