@@ -51,8 +51,8 @@ tester starts a throwaway `postgres:18` itself.
                          # and the brief for wk3 opens
 ./test.sh                # what the learner sees on wk3; do it yourself, or sketch it
 ./review.sh --diff wk3   # then compare with the reference
-./review.sh --brief      # the current stage's brief again (--full: whole assignment weeks)
-./review.sh --list       # every stage with its Framewise weeks; ★ = worth doing yourself
+./review.sh --brief      # the current stage's brief again
+./review.sh --list       # every stage; ★ = worth doing yourself
 ```
 
 For reviewers learning the course quickly: do one stage on top of the reference solution of the
@@ -60,11 +60,8 @@ one before, with the same `./test.sh` a learner uses. It overwrites `app/` (and,
 stages, `tests/`, `.gitlab-ci.yml`, `Containerfile`, `.containerignore` and `deploy/`), so commit first.
 
 The brief is one page per stage: the task and why the design breaks, the files the reference
-changed and a map of the code so far, what to look for in review, and the Framewise weeks the stage
-stands for (what each adds, its task, when it's done, its reading list, the tutor's checks). That
-last part reads `ASSIGNMENTS.md` and `TUTOR.md` from a
-[framewise](https://github.com/GuyLevavi/framewise) clone next to this repo, or `FRAMEWISE_REPO`.
-Both scripts come from the pinned course (`tools/fast_track.sh`, `tools/brief.py`); its
+changed and a map of the code so far, what to look for in review, and the stage's pointers. Both
+scripts come from the pinned course (`tools/fast_track.sh`, `tools/brief.py`); its
 `REVIEWING.md` has the full review notes.
 
 ## Tests
