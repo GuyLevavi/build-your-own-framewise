@@ -13,7 +13,7 @@ import (
 	"github.com/codecrafters-io/tester-utils/test_case_harness"
 )
 
-// The delivery stages: Framewise weeks 3, 7, 8 and 9 (GitLab CI, images, the pod, the Helm
+// The delivery stages (GitLab CI, images, the pod, the Helm
 // chart and release by commit), checked on one offline machine with podman, helm and git.
 // What needs the real services (pushing to Quay, an Argo CD sync, OpenShift) stays with the
 // assignment's review.
@@ -534,7 +534,7 @@ func testChart(harness *test_case_harness.TestCaseHarness) error {
 	return checkManifests(harness, docs, out, tag)
 }
 
-// checkManifests holds the rendered chart to what week 8 asks of the cluster manifests.
+// checkManifests holds the rendered chart to what the assignment asks of the cluster manifests.
 func checkManifests(harness *test_case_harness.TestCaseHarness, docs []kobj, rendered, tag string) error {
 	apiD, api := findContainer(docs, "serve")
 	workerD, worker := findContainer(docs, "work")
