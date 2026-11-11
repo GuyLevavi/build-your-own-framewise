@@ -1,0 +1,47 @@
+# The tester's own pipeline: vet, unit tests (stage list against the course definition, the clips
+# against the numbers the stage descriptions quote) and a static build.
+#
+# Project variables (Settings > CI/CD > Variables):
+#   GO_IMAGE   a Go 1.24 image in the registry
+#   GOPROXY    the Go module mirror the network allows (or set GOFLAGS=-mod=vendor after
+#              committing `go mod vendor`)
+
+default:
+  image: ${GO_IMAGE}
+
+variables:
+  CGO_ENABLED: "0"
+  GOTOOLCHAIN: local             # never download a toolchain
+  GOPATH: ${CI_PROJECT_DIR}/.go  # inside the project, so the runner can cache modules
+  GOCACHE: ${CI_PROJECT_DIR}/.go-build
+
+cache:
+  key:
+    files: [go.sum]
+  paths: [.go/pkg/mod, .go-build]
+
+stages: [check, build]
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+vet:
+  stage: check
+  script:
+    - test -z "$(gofmt -l cmd internal/*.go)" || (gofmt -l cmd internal/*.go && exit 1)
+    - go vet ./...
+
+test:
+  stage: check
+  script:
+    - go test -count=1 ./...
+
+build:
+  stage: build
+  script:
+    - make build
+  artifacts:
+    paths: [dist/]
+    expire_in: 1 week

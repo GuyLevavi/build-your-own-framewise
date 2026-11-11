@@ -1,0 +1,216 @@
+---
+# Layout and field meanings follow codecrafters-io/build-your-own-http-server (MIT, see LICENSE).
+slug: "framewise"
+name: "Build your own Framewise"
+short_name: "Framewise"
+release_status: "alpha"
+
+description_md: |-
+  Framewise is a small video analytics service: it takes recorded video, runs a detector we hand
+  you as a black box, and serves what appeared and when over HTTP. In this challenge you'll grow
+  it from an empty `main.py` into a service with a Postgres job queue, several workers that
+  survive crashes, results you can query, and the speed and memory budgets of production.
+
+  Along the way you'll learn about streaming data, YAML config, FastAPI, Postgres and Alembic,
+  `SKIP LOCKED` queues, signals, SQL over results, profiling, multiprocessing, calling a model
+  server, and observability.
+
+short_description_md: |-
+  Learn about job queues, Postgres, workers, profiling and running a service
+
+completion_percentage: 30
+
+languages:
+  - slug: "python"
+
+marketing:
+  difficulty: medium
+  sample_extension_idea_title: "A real model"
+  sample_extension_idea_description: "Swap fwdetect for YOLO on Triton behind the same job API"
+  testimonials: []
+
+stages:
+  # Probe a video
+  - slug: "pb1"
+    name: "Probe a video"
+    difficulty: very_easy
+    marketing_md: |-
+      In this stage, you'll open a video with OpenCV and print its size, frame rate and length as JSON.
+
+  - slug: "pb2"
+    name: "Fail cleanly"
+    difficulty: easy
+    marketing_md: |-
+      In this stage, you'll make missing and broken files fail with one clear line, not a traceback.
+
+  # Analyze
+  - slug: "an1"
+    name: "Analyze a clip"
+    difficulty: easy
+    marketing_md: |-
+      In this stage, you'll run the shipped detector on sampled frames and report when each label appears.
+
+  - slug: "an2"
+    name: "Analyze a long clip"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll analyze ten minutes of video under a memory budget.
+
+  - slug: "an3"
+    name: "Profiles in YAML"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll load named analysis profiles from YAML and reject bad ones precisely.
+
+  # Serve
+  - slug: "ap1"
+    name: "Upload a video"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll serve an HTTP API that takes uploads as a stream, with size and type limits.
+
+  - slug: "ap2"
+    name: "Run jobs"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll run analysis jobs in the background and report their status and errors.
+
+  - slug: "ap3"
+    name: "Survive a restart"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll keep videos and jobs in Postgres, so a restart loses nothing.
+
+  - slug: "wk1"
+    name: "Separate the worker"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll move job execution out of the API into its own `work` process.
+
+  - slug: "wk2"
+    name: "Many workers"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll run several workers against one queue without two of them taking the same job.
+
+  - slug: "wk3"
+    name: "Crashed workers"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll give claims a lease so a job outlives the worker that died running it.
+
+  - slug: "wk4"
+    name: "Stop gracefully"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll make a worker stop cleanly on SIGTERM and hand its job back.
+
+  - slug: "rs1"
+    name: "Store detections"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll store every box in Postgres and serve a time range of them, through an index.
+
+  - slug: "rs2"
+    name: "Events in SQL"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll find events (a person crossing a car) with a gaps-and-islands query.
+
+  - slug: "rs3"
+    name: "Retries without duplicates"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll make a retried or rerun job store its results exactly once, detections and episodes alike.
+
+  - slug: "pf1"
+    name: "Downscale"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll make 1080p analysis several times faster by running the detector at a smaller size.
+
+  - slug: "pf2"
+    name: "Use every core"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll split one job across processes, and find out what the parent process costs you.
+
+  - slug: "pf3"
+    name: "When a process dies"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll keep a worker alive and honest when one of its pool processes crashes.
+
+  # Call a model server
+  - slug: "md1"
+    name: "Call a model server"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll run the detector on a model server that speaks Triton's HTTP protocol, chosen by a profile setting.
+
+  - slug: "md2"
+    name: "Batch and pipeline"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll batch frames and keep several requests in flight to hit a frame rate, without reading ahead past a memory budget.
+
+  - slug: "md3"
+    name: "When the model server fails"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll set timeouts, retry what's worth retrying, and fail a job clearly when the model server can't help.
+
+  - slug: "op1"
+    name: "Metrics and logs"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll expose Prometheus metrics, report each job's frames per second, and write structured logs a log platform can search.
+
+  - slug: "op2"
+    name: "Live progress"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll stream a job's progress to clients with server-sent events and Postgres LISTEN/NOTIFY.
+
+  - slug: "op3"
+    name: "Survive a database outage"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll keep the API and the workers up while the database is gone, and recover when it's back.
+
+  - slug: "hd1"
+    name: "API keys"
+    difficulty: easy
+    marketing_md: |-
+      In this stage, you'll protect the API with a key, compared the way secrets should be.
+
+  # Ship it: CI, image, pod, chart and release, checked on this machine with podman, helm and git
+  - slug: "ci1"
+    name: "Gate merges"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll write the GitLab pipeline that stops a broken merge request.
+
+  - slug: "im1"
+    name: "Build an image"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll package the service as one small image that runs as any user.
+
+  - slug: "im2"
+    name: "Run the pod"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll run the API, a worker and Postgres together with podman kube play.
+
+  - slug: "hm1"
+    name: "Chart it"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll write the Helm chart that runs Framewise in OpenShift.
+
+  - slug: "hm2"
+    name: "Release by commit"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll make a release a Git commit that Argo CD syncs and a revert undoes.
