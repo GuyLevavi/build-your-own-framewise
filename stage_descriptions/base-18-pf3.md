@@ -19,5 +19,3 @@ The tester runs one worker with 2 or more processes, `FRAMEWISE_LEASE_S=3` and `
 
 - [`BrokenProcessPool`](https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.process.BrokenProcessPool) and CPython issue "Pool hangs if a worker process dies unexpectedly" (bpo-22393).
 - Search: `ProcessPoolExecutor recreate after BrokenProcessPool`, `supervisor pattern`.
-
-Prepares for Framewise week 10.

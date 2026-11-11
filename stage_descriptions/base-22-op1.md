@@ -25,5 +25,3 @@ Log calls with the id pasted into the message (`log.info(f"job {id} done")`) can
 - [prometheus_client](https://prometheus.github.io/client_python/) (custom collectors, multiprocess mode and why we avoid it here), and [Prometheus naming and label best practices](https://prometheus.io/docs/practices/naming/).
 - [Python logging cookbook: structured logging](https://docs.python.org/3/howto/logging-cookbook.html#implementing-structured-logging).
 - Search: `prometheus high cardinality labels`, `starlette route template middleware`.
-
-Prepares for Framewise week 8.

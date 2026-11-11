@@ -30,5 +30,3 @@ You could compute events in Python while the job runs and store them, but then t
 
 - [PostgreSQL: window functions tutorial](https://www.postgresql.org/docs/current/tutorial-window.html) (`lag`, running `sum() OVER (ORDER BY ...)`).
 - Search: `gaps and islands sql`, `postgres self join overlapping rectangles`, `common table expressions`.
-
-Prepares for Framewise week 10.

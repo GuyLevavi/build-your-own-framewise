@@ -21,5 +21,3 @@ Every request so far was short. An event stream is a long-lived request, so it c
 - [PostgreSQL `NOTIFY`](https://www.postgresql.org/docs/current/sql-notify.html) and [psycopg: asynchronous notifications](https://www.psycopg.org/psycopg3/docs/advanced/async.html#asynchronous-notifications).
 - [MDN: using server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events) and Starlette's `StreamingResponse`.
 - Search: `sse vs websockets`, `listen notify race condition`.
-
-Prepares for Framewise week 10.

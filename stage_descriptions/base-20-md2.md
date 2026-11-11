@@ -27,5 +27,3 @@ The trap is reading ahead. `ThreadPoolExecutor.map` and "submit everything, then
 - Triton's [dynamic batcher](https://github.com/triton-inference-server/tutorials/tree/main/Conceptual_Guide/Part_2-improving_resource_utilization) explains why servers like batches. Triton can batch requests from many clients itself; sending full batches is still the cheapest path.
 - [`concurrent.futures`](https://docs.python.org/3/library/concurrent.futures.html) and [`itertools.batched`](https://docs.python.org/3/library/itertools.html#itertools.batched). Waiting on the network releases the GIL, so threads are fine for this.
 - Search: `backpressure bounded queue python`, `Executor.map consumes iterator eagerly`, `Little's law throughput latency concurrency`.
-
-Prepares for Framewise weeks 5 and 10.

@@ -22,5 +22,3 @@ The tester runs with `FRAMEWISE_LEASE_S=3` and `FRAMEWISE_MAX_ATTEMPTS=2`, start
 - Martin Kleppmann, *Designing Data-Intensive Applications*, chapter 8, "Process pauses" and "Leases".
 - [Python `threading.Event`](https://docs.python.org/3/library/threading.html#event-objects) for a heartbeat you can stop.
 - Search: `visibility timeout`, `job queue lease heartbeat`, `poison message`.
-
-Prepares for Framewise weeks 4 and 8.

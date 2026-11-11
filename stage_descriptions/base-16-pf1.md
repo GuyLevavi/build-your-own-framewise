@@ -22,5 +22,3 @@ Nothing in your code knew a frame's size, and now one function does: the one tha
 - [Scalene](https://github.com/plasma-umass/scalene) (in the `profile` dependency group: `uv sync --group profile`) shows time and memory per line, split into Python and native code. [py-spy](https://github.com/benfred/py-spy) samples a process that is already running: `py-spy top --pid <worker>` or `py-spy record -o profile.svg -- python -m app.main analyze ...`.
 - [`cv2.resize`](https://docs.opencv.org/4.x/da/d54/group__imgproc__transform.html#ga47a974309e9102f5f08231edc7e7529d) and its interpolation flags.
 - Search: `INTER_AREA vs INTER_LINEAR downscale`, `frames per second budget video pipeline`.
-
-Prepares for Framewise weeks 5 and 10.

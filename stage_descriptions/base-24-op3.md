@@ -23,5 +23,3 @@ Database errors used to be bugs, caught by the "internal error" handler or not a
 - [Kubernetes: liveness, readiness and startup probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
 - [SQLAlchemy: dealing with disconnects](https://docs.sqlalchemy.org/en/20/core/pooling.html#dealing-with-disconnects) and libpq's `connect_timeout`.
 - Search: `exponential backoff jitter`, `fastapi exception_handler`.
-
-Prepares for Framewise week 8.

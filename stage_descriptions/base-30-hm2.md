@@ -26,7 +26,7 @@ Afterwards:
 
 Finally, `git revert` of that commit must bring back the old tag.
 
-The build job isn't run: pushing to Quay, and Argo CD's sync, happen in week 9 of the assignment, with devops.
+The build job isn't run: pushing to Quay, and Argo CD's sync, happen in the assignment, with devops.
 
 ### Why your design just broke
 
@@ -38,5 +38,3 @@ Up to now, deploying meant someone running a command. That leaves no record of w
 - Argo CD: [Helm](https://argo-cd.readthedocs.io/en/stable/user-guide/helm/), [Automated Sync Policy](https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/) and [Sync Phases and Waves](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-waves/).
 - GitLab: [skip a pipeline](https://docs.gitlab.com/ci/pipelines/#skip-a-pipeline), [project access tokens](https://docs.gitlab.com/user/project/settings/project_access_tokens/), [predefined variables](https://docs.gitlab.com/ci/variables/predefined_variables/).
 - Search: `gitops image tag bump pipeline`, `argocd presync hook database migration`.
-
-Prepares for Framewise week 9.

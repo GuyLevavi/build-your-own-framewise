@@ -23,5 +23,3 @@ If authentication is a check pasted at the top of each handler, the next endpoin
 - [`hmac.compare_digest`](https://docs.python.org/3/library/hmac.html#hmac.compare_digest), and [FastAPI security](https://fastapi.tiangolo.com/tutorial/security/) (dependencies vs middleware).
 - OWASP: [API2:2023 Broken Authentication](https://owasp.org/API-Security/editions/2023/en/0xa2-broken-authentication/).
 - Search: `timing attack string comparison`, `kubernetes secret environment variable`.
-
-Prepares for Framewise week 10.

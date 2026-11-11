@@ -40,5 +40,3 @@ The pre- and post-processing are where real bugs hide. OpenCV gives you BGR and 
 - Triton's [HTTP/REST protocol](https://github.com/triton-inference-server/server/blob/main/docs/protocol/README.md) and its [binary data extension](https://github.com/triton-inference-server/server/blob/main/docs/protocol/extension_binary_data.md). Sending frames as JSON numbers works and is many times slower.
 - The standard library's `urllib.request` is enough here. `tritonclient[http]` speaks the same protocol, if your package mirror has it.
 - Search: `numpy tobytes frombuffer`, `cv2.cvtColor COLOR_BGR2RGB`, `kserve v2 inference protocol`.
-
-Prepares for Framewise week 5.

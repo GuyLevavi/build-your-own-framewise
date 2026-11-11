@@ -22,5 +22,3 @@ The worker's loop now produces two things per frame: rows to store and sightings
 - [PostgreSQL: multicolumn indexes](https://www.postgresql.org/docs/current/indexes-multicolumn.html) and [`EXPLAIN`](https://www.postgresql.org/docs/current/using-explain.html).
 - SQLAlchemy: "executemany" with a list of dicts in [`Connection.execute`](https://docs.sqlalchemy.org/en/20/tutorial/dbapi_transactions.html#sending-multiple-parameters).
 - Search: `postgres bulk insert performance`, `index column order equality range`.
-
-Prepares for Framewise weeks 4 and 10.

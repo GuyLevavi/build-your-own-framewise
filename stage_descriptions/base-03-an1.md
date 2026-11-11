@@ -22,5 +22,3 @@ The tester analyzes a 12-second street clip (a person walks right, a car drives 
 
 - Keep turning sightings into segments separate from reading the video: it's a plain function of `(time, labels)` pairs that you can test without a video.
 - Search: `python dataclass`, `itertools groupby`.
-
-Prepares for Framewise week 2.

@@ -30,5 +30,3 @@ Three things that never mattered on one machine matter now. First, startup order
 - [Configure a Pod to Use a ConfigMap](https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/).
 - [Pod lifecycle: container restart policy](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#restart-policy).
 - Search: `uvicorn host 0.0.0.0 container`, `kubernetes wait for database before start`.
-
-Prepares for Framewise weeks 7 and 8.

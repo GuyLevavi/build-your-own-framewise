@@ -11,7 +11,7 @@
 # codecrafters-framewise-python), .stage becomes STAGE_SLUG, so its ./test.sh runs up to it.
 #
 # Last, it prints the stage's brief (tools/brief.py): the task, what the reference built, what to
-# look for in review and the Framewise assignment weeks behind it. Set FAST_TRACK_BRIEF=0 to skip it.
+# look for in review and what the stage points to. Set FAST_TRACK_BRIEF=0 to skip it.
 set -euo pipefail
 
 course_dir="$(cd "$(dirname "$0")/.." && pwd)"
@@ -60,14 +60,13 @@ else
   echo "Test it:        $course_dir/tools/run_tests.sh $dir $slug"
 fi
 echo "Then compare:   $course_dir/solutions/python/$(printf %02d "$n")-$slug/diff/"
-echo "The brief:      $course_dir/tools/brief.py $slug [--full] [--diff]"
+echo "The brief:      $course_dir/tools/brief.py $slug [--diff]"
 
 if [[ "${FAST_TRACK_BRIEF:-1}" != 0 ]]; then
-  # From the attempt's directory, so the brief finds a framewise clone next to it.
   if [[ -t 1 ]]; then
-    (cd "$dir" && python3 "$course_dir/tools/brief.py" "$slug" | "${PAGER:-less}")
+    python3 "$course_dir/tools/brief.py" "$slug" | "${PAGER:-less}"
   else
     echo
-    (cd "$dir" && python3 "$course_dir/tools/brief.py" "$slug")
+    python3 "$course_dir/tools/brief.py" "$slug"
   fi
 fi

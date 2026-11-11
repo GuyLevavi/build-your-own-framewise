@@ -21,5 +21,3 @@ Python's default for SIGTERM is to die on the spot. Handling it means a stop fla
 - [Python `signal`](https://docs.python.org/3/library/signal.html), especially "Execution of Python signal handlers".
 - [Kubernetes: termination of pods](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination).
 - Search: `graceful shutdown worker sigterm python`, `terminationGracePeriodSeconds`.
-
-Prepares for Framewise week 8.

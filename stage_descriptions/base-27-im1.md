@@ -28,5 +28,3 @@ On your machine the program runs as you, from a virtualenv that `uv run` keeps u
 - [Multi-stage builds](https://docs.docker.com/build/building/multi-stage/) and [building best practices](https://docs.docker.com/build/building/best-practices/). They apply to Podman unchanged.
 - OpenShift docs, [Creating images](https://docs.redhat.com/en/documentation/openshift_container_platform/4.16/html/images/creating-images), section "Support arbitrary user ids".
 - Search: `docker entrypoint exec form pid 1 signals`, `chgrp -R 0 chmod g=u openshift`.
-
-Prepares for Framewise week 7.
