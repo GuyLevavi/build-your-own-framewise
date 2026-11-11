@@ -18,7 +18,7 @@ The chart lives in `deploy/chart/`, with `Chart.yaml`, `values.yaml` and `values
 
 ### Tests
 
-The tester runs `helm lint deploy/chart -f deploy/chart/values-nonprod.yaml`, then `helm template fw deploy/chart -f deploy/chart/values-nonprod.yaml --set image.tag=tester-NNNNNN`. It checks the rendered objects against the list above. Nothing is installed: the cluster part is week 8 of the assignment, with the tutor.
+The tester runs `helm lint deploy/chart -f deploy/chart/values-nonprod.yaml`, then `helm template fw deploy/chart -f deploy/chart/values-nonprod.yaml --set image.tag=tester-NNNNNN`. It checks the rendered objects against the list above. Nothing is installed: the cluster part is in the assignment, with the tutor.
 
 ### Why your design just broke
 
@@ -30,5 +30,3 @@ The pod from im2 hard-coded everything: the database password, a hostPort, an em
 - [Configure Liveness, Readiness and Startup Probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
 - [Persistent volumes: access modes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes) and [Secrets as environment variables](https://kubernetes.io/docs/concepts/configuration/secret/#using-secrets-as-environment-variables).
 - Search: `openshift route edge termination`, `helm checksum configmap annotation restart`.
-
-Prepares for Framewise week 8.

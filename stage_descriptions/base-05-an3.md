@@ -35,5 +35,3 @@ If `--every` and `--max-gap` went straight into your functions as loose argument
 
 - Pydantic [Models](https://pydantic.dev/docs/validation/latest/concepts/models/): `extra="forbid"` turns typos into errors, and a `ValidationError`'s `loc` is the path you need.
 - Search: `yaml.safe_load`, `pydantic ValidationError errors loc`.
-
-Prepares for Framewise week 2.

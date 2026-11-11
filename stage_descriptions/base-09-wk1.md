@@ -22,5 +22,3 @@ The thread, its in-memory queue and the "requeue unfinished jobs at startup" ste
 
 - [PostgreSQL: explicit locking, row-level locks](https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-ROWS) and [`SELECT ... FOR UPDATE`](https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE).
 - Search: `postgres as a job queue`, `polling worker loop`, `separate API and worker processes`.
-
-Prepares for Framewise week 4.

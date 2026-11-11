@@ -18,5 +18,3 @@ If you read every frame into a list and then sampled it, the list is the problem
 
 - [How to Use Generators and yield in Python](https://realpython.com/introduction-to-python-generators/) (Real Python).
 - Search: `cv2.VideoCapture grab vs read`, `python generator pipeline`.
-
-Prepares for Framewise week 2.

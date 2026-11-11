@@ -9,9 +9,7 @@ yourself, and what to look for at each stage.
 You don't need to build all 30 stages to review them. Work in a solution repo, the way a learner
 does: [codecrafters-framewise-python](https://github.com/GuyLevavi/codecrafters-framewise-python)
 pins this course and the tester as flake inputs, like codecrafters-shell-c, so the tester comes
-with your attempt and `./test.sh` runs it. Clone
-[framewise](https://github.com/GuyLevavi/framewise) next to it for the assignment material. Then, for
-each stage:
+with your attempt and `./test.sh` runs it. Then, for each stage:
 
 ```sh
 ./review.sh wk3      # app/ becomes the reference solution of wk2, .stage becomes wk3, and the
@@ -35,20 +33,16 @@ days, and covers everything a learner hits. `tools/verify_course.sh` proves the 
 
 ### The brief
 
-`tools/brief.py <slug>` (`./review.sh --brief <slug>` in the solution repo) is one page per stage, so
-you stay level with both the course and the assignment it stands for:
+`tools/brief.py <slug>` (`./review.sh --brief <slug>` in the solution repo) is one page per stage:
 
 - **The task:** the stage's opening and its "Why your design just broke".
 - **What the reference built:** the files the stage changed, with line counts, and a map of
   every file the learner has written by then, each with its one-line purpose, marked new or changed.
   `--diff` appends the diff.
 - **In review:** this stage's row of the table below.
-- **The assignment:** each Framewise week the stage covers, from `framewise/ASSIGNMENTS.md`: what the
-  week adds, its task, when it's done and its reading list; and the week's row of `TUTOR.md` (what
-  to check, common mistakes). `--full` prints the weeks whole. It finds framewise through
-  `FRAMEWISE_REPO`, or a clone next to this repo or next to where you run it.
+- **What the learner reads:** the stage's pointers.
 
-`tools/brief.py --list` lists every stage with its weeks and ★.
+`tools/brief.py --list` lists every stage with its ★.
 
 ## Per stage
 
@@ -86,7 +80,7 @@ passing, check:
 | im1 ★ | Dependencies installed before `COPY app` (layer reuse); exec-form `ENTRYPOINT`; nothing written at startup; ask them to show the size against a single-stage build. |
 | im2 | Waiting for Postgres in the pod, not a `sleep`; `--host` with a safe default; the pod YAML reads like the manifests that come next. |
 | hm1 ★ | Liveness on `/health`, readiness on `/ready`, and they can say why; a checksum annotation so a ConfigMap change rolls the pods; nothing secret in values files. |
-| hm2 ★ | `[skip ci]` and why; the deploy job touches only the tag; PreSync for migrations; ask what a failed sync looks like against an unhealthy app. The live part (Quay push, Argo sync, a revert in nonprod) is week 9 with devops. |
+| hm2 ★ | `[skip ci]` and why; the deploy job touches only the tag; PreSync for migrations; ask what a failed sync looks like against an unhealthy app. The live part (Quay push, Argo sync, a revert in nonprod) happens in the assignment, with devops. |
 
 ## Things the tester can't check
 

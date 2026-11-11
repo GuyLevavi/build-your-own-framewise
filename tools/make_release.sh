@@ -6,9 +6,7 @@
 #   framewise-course-<rev>.tar.gz    for the learner: stages, starter, tools, tester. No solutions.
 #   framewise-reviewer-<rev>.tar.gz  for the reviewer: the same, plus reference solutions and their
 #                                    diffs, fwdetect's source, verify_course.sh, fast_track.sh,
-#                                    brief.py and REVIEWING.md; and, when a framewise clone is
-#                                    found (FRAMEWISE_REPO, default ../framewise), its
-#                                    ASSIGNMENTS.md and TUTOR.md for the brief.
+#                                    brief.py and REVIEWING.md.
 #
 # Each unpacks to build-your-own-framewise/ and framewise-tester/ side by side, the layout
 # tools/run_tests.sh expects. The tester comes as a static linux/amd64 binary and as source with its
@@ -54,12 +52,6 @@ pack() {
     cp -a "$work/full/$path" "$stage/build-your-own-framewise/$path"
   done
   cp -a "$work/framewise-tester" "$stage/framewise-tester"
-  # The assignment the brief quotes, as framewise/ next to the course (where brief.py looks).
-  local framewise="${FRAMEWISE_REPO:-$course_dir/../framewise}"
-  if [[ "$name" == framewise-reviewer && -f "$framewise/ASSIGNMENTS.md" ]]; then
-    mkdir -p "$stage/framewise"
-    cp "$framewise/ASSIGNMENTS.md" "$framewise/TUTOR.md" "$stage/framewise/"
-  fi
   if [[ "${IMAGES:-}" == 1 ]]; then
     mkdir -p "$stage/images"
     for image in docker.io/library/postgres:18 ghcr.io/astral-sh/uv:python3.12-bookworm-slim; do

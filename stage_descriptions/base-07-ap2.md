@@ -20,5 +20,3 @@ The tester runs a job with the default profile and one with `people` on the stre
 
 - One daemon `threading.Thread` reading job ids from a `queue.Queue` is enough. Two threads now share your job records, so a reader must never see a half-updated job.
 - Search: `python queue.Queue worker thread`, `FastAPI status_code 202`.
-
-Prepares for Framewise week 3.

@@ -1,24 +1,18 @@
 #!/usr/bin/env python3
 """The reviewer's brief for a stage: what it asks, what the reference built, what to look for in
-review, and the Framewise assignment material the stage stands for.
+review and what the stage points the learner to read.
 
-    tools/brief.py STAGE_SLUG [--full] [--diff]
+    tools/brief.py STAGE_SLUG [--diff]
     tools/brief.py --list
 
---full prints the stage's assignment weeks whole; by default each shows what it adds, its task,
-when it is done and its reading list. --diff appends the reference
-diff itself. --list prints every stage with its Framewise weeks and review marks.
-
-The assignment material comes from the framewise repo (ASSIGNMENTS.md and TUTOR.md): set
-FRAMEWISE_REPO, or clone it next to this repo or next to the directory you run from. Without it the
-brief says so and prints the rest.
+--diff appends the reference diff itself. --list prints every stage, with ★ on the ones REVIEWING.md
+suggests doing yourself.
 
 Standard library only, so it runs wherever the course's shell tools do.
 """
 
 import argparse
 import ast
-import os
 import re
 import sys
 from pathlib import Path
@@ -58,12 +52,6 @@ def table_rows(text: str, header_start: str) -> list[list[str]]:
     return []
 
 
-def weeks_by_slug() -> dict[str, list[int]]:
-    """Framewise weeks per stage, from the README's stage table."""
-    rows = table_rows((COURSE / "README.md").read_text(), "| # | Slug |")
-    return {r[1]: [int(w) for w in re.findall(r"\d+", r[4])] for r in rows if len(r) >= 5}
-
-
 def review_rows() -> dict[str, tuple[bool, str]]:
     """(starred, what to look for) per stage, from REVIEWING.md."""
     rows = table_rows((COURSE / "REVIEWING.md").read_text(), "| Stage |")
@@ -75,69 +63,19 @@ def review_rows() -> dict[str, tuple[bool, str]]:
     return out
 
 
-def framewise_repo() -> Path | None:
-    candidates = [os.environ.get("FRAMEWISE_REPO", ""), COURSE.parent / "framewise", Path.cwd().parent / "framewise"]
-    for c in candidates:
-        if c and (Path(c) / "ASSIGNMENTS.md").is_file():
-            return Path(c)
-    return None
+def section(text: str, heading: str) -> str:
+    """The body of a ### section of a stage text."""
+    m = re.search(rf"(?ms)^### {re.escape(heading)}\s*\n(.*?)(?=^### |\Z)", text)
+    return m.group(1).strip() if m else ""
 
 
-def week_sections(assignments: str) -> dict[int, str]:
-    """'### Week N: ...' sections of ASSIGNMENTS.md, heading included."""
-    out = {}
-    parts = re.split(r"(?m)^(?=### Week \d+:)", assignments)
-    for part in parts:
-        if m := re.match(r"### Week (\d+):", part):
-            # A week ends at the next heading of any level up to ###.
-            body = re.split(r"(?m)^(?=#{1,3} )", part[len(m.group(0)) :], maxsplit=1)[0]
-            out[int(m.group(1))] = (part[: len(m.group(0))] + body).rstrip()
-    return out
-
-
-def fields(section: str) -> dict[str, str]:
-    """A week section's **Name:** blocks, each up to the next one."""
-    out = {}
-    for m in re.finditer(r"(?ms)^\*\*([^*\n]+):\*\*(.*?)(?=^\*\*[^*\n]+:\*\*|\Z)", section):
-        out[m.group(1)] = m.group(2).strip()
-    return out
-
-
-def reading(block: str) -> list[str]:
-    """The titles in a numbered reading list, one per item."""
-    items = []
-    for line in block.splitlines():
-        if m := re.match(r"\d+\. (.*)", line):
-            titles = re.findall(r"\[([^\]]+)\]", m.group(1))
-            items.append(", ".join(titles) if titles else m.group(1))
-    return items
-
-
-def compact_week(section: str) -> list[str]:
-    """What the week adds, what to read, what it asks and when it is done."""
-    f = fields(section)
-    out = []
-    for name in ("Gains", "Task", "Done when"):
-        if f.get(name):
-            sep = "\n" if f[name].startswith("- ") else " "
-            out += [f"{name}:{sep}{f[name]}", ""]
-    if titles := reading(f.get("Read, in order", "")):
-        out += ["Reading:"] + [f"  {i}. {t}" for i, t in enumerate(titles, 1)] + [""]
-    return out
-
-
-def tutor_rows(tutor: str) -> dict[int, list[str]]:
-    rows = table_rows(tutor, "| Week |")
-    return {int(r[0]): r for r in rows if r and r[0].isdigit()}
-
-
-def description(slug: str, n: int) -> tuple[Path, str, str]:
-    """The stage text's path, its opening (before the first heading) and its 'why it broke'."""
+def description(slug: str, n: int) -> tuple[Path, str, str, str]:
+    """The stage text's path, its opening (before the first heading), its 'why it broke' and its
+    pointers."""
     path = COURSE / "stage_descriptions" / f"base-{n:02d}-{slug}.md"
     text = path.read_text()
     opening = re.split(r"(?m)^#{1,4} ", text, maxsplit=1)[0].strip()
-    m = re.search(r"(?ms)^### Why your design just broke\s*\n(.*?)(?=^### |\Z)", text)
-    return path, opening, (m.group(1).strip() if m else "")
+    return path, opening, section(text, "Why your design just broke"), section(text, "Pointers")
 
 
 def diff_files(n: int, slug: str) -> list[tuple[str, int, int, bool]]:
@@ -211,24 +149,18 @@ def wrap(text: str, indent: str = "") -> str:
     )
 
 
-def brief(slug: str, full: bool, with_diff: bool) -> str:
+def brief(slug: str, with_diff: bool) -> str:
     all_stages = stages()
     slugs = [s for s, _ in all_stages]
     if slug not in slugs:
         sys.exit(f"unknown stage: {slug} (have: {' '.join(slugs)})")
     n = slugs.index(slug) + 1
     name = all_stages[n - 1][1]
-    weeks = weeks_by_slug()
     starred, look_for = review_rows().get(slug, (False, ""))
-    stage_weeks = weeks.get(slug, [])
 
-    out = []
-    title = f"# Stage {n}/{len(slugs)}: {name} ({slug}){' ★' if starred else ''}"
-    out += [title, ""]
-    if stage_weeks:
-        out += [f"Framewise week{'s' if len(stage_weeks) > 1 else ''} {', '.join(map(str, stage_weeks))}.", ""]
+    out = [f"# Stage {n}/{len(slugs)}: {name} ({slug}){' ★' if starred else ''}", ""]
 
-    path, opening, why = description(slug, n)
+    path, opening, why, pointers = description(slug, n)
     out += ["## The task", "", wrap(opening), ""]
     if why:
         out += ["What breaks:", "", wrap(why, "  "), ""]
@@ -256,31 +188,8 @@ def brief(slug: str, full: bool, with_diff: bool) -> str:
         out += ["  ★ REVIEWING.md suggests doing this one yourself rather than reading the diff.", ""]
     out += ["  Always: basedpyright and ruff clean, unit tests for pure logic, profiles on performance PRs.", ""]
 
-    out += ["## The assignment", ""]
-    repo = framewise_repo()
-    if not stage_weeks:
-        out += ["  This stage has no Framewise week.", ""]
-    elif repo is None:
-        out += [
-            "  framewise/ASSIGNMENTS.md not found: set FRAMEWISE_REPO, or clone framewise next to this",
-            "  course or next to the directory you run from.",
-            "",
-        ]
-    else:
-        sections = week_sections((repo / "ASSIGNMENTS.md").read_text())
-        tutor = tutor_rows((repo / "TUTOR.md").read_text()) if (repo / "TUTOR.md").is_file() else {}
-        for w in stage_weeks:
-            section = sections.get(w)
-            if section is None:
-                out += [f"  Week {w}: not in ASSIGNMENTS.md", ""]
-                continue
-            heading = section.splitlines()[0].lstrip("# ").strip()
-            out += [f"### {heading}", ""]
-            out += [section.split("\n", 1)[1].strip(), ""] if full else compact_week(section)
-            if row := tutor.get(w):
-                out += [f"Tutor's review list: {row[2]}"]
-                out += [f"Common mistakes: {row[3]}", ""] if len(row) > 3 else [""]
-        out += [f"From {repo}/ASSIGNMENTS.md and TUTOR.md{'' if full else '; --full for whole weeks'}.", ""]
+    if pointers:
+        out += ["## What the learner reads", "", pointers, ""]
 
     if with_diff:
         out += ["## The reference diff", ""]
@@ -290,27 +199,24 @@ def brief(slug: str, full: bool, with_diff: bool) -> str:
 
 
 def listing() -> str:
-    weeks = weeks_by_slug()
     review = review_rows()
     out = []
     for i, (slug, name) in enumerate(stages(), 1):
         starred = review.get(slug, (False, ""))[0]
-        w = ",".join(map(str, weeks.get(slug, [])))
-        out.append(f"{i:3d}  {slug}  {'★' if starred else ' '}  {name:<32} week {w}")
+        out.append(f"{i:3d}  {slug}  {'★' if starred else ' '}  {name}")
     return "\n".join(out) + "\n"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("slug", nargs="?")
-    parser.add_argument("--full", action="store_true", help="print every assignment week in full")
     parser.add_argument("--diff", action="store_true", help="append the reference diff")
-    parser.add_argument("--list", action="store_true", help="every stage, its weeks and ★")
+    parser.add_argument("--list", action="store_true", help="every stage, ★ on those worth doing yourself")
     args = parser.parse_args()
     if args.list or not args.slug:
         sys.stdout.write(listing())
         return
-    sys.stdout.write(brief(args.slug, args.full, args.diff))
+    sys.stdout.write(brief(args.slug, args.diff))
 
 
 if __name__ == "__main__":

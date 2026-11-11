@@ -23,5 +23,3 @@ From this stage on, the tester also sets `FRAMEWISE_PROFILES` (a profiles file l
 
 - FastAPI tutorial: [Request Files](https://fastapi.tiangolo.com/tutorial/request-files/) and [Handling Errors](https://fastapi.tiangolo.com/tutorial/handling-errors/).
 - Search: `UploadFile file.read chunk`, `shutil.copyfileobj`.
-
-Prepares for Framewise weeks 3 and 10.

@@ -19,5 +19,3 @@ With `FOR UPDATE`, every worker that reads the same "oldest pending job" waits o
 
 - [`SKIP LOCKED` in the `SELECT` docs](https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE), and the 2ndQuadrant post "What is SKIP LOCKED for in PostgreSQL 9.5?".
 - Search: `postgres queue skip locked`, `read committed lost update`, `fwdetect trace` in this course's README.
-
-Prepares for Framewise week 4.

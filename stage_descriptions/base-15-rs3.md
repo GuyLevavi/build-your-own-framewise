@@ -26,5 +26,3 @@ Episodes need a key that comes from what the episode is, not from when it was wr
 
 - [`INSERT ... ON CONFLICT`](https://www.postgresql.org/docs/current/sql-insert.html#SQL-ON-CONFLICT).
 - Search: `idempotent consumer`, `at-least-once delivery`, `exactly-once is at-least-once plus idempotence`.
-
-Prepares for Framewise weeks 4 and 8.

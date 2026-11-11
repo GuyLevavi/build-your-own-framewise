@@ -21,5 +21,3 @@ The tester writes two synthetic MJPG clips (640×360 at 10 fps: 120 frames and 6
 
 - The starter code in `app/main.py` prints the size once you uncomment it; the rest is in `VideoCapture`'s `CAP_PROP_*` properties.
 - [Getting Started with Videos](https://docs.opencv.org/4.x/dd/d43/tutorial_py_video_display.html) (OpenCV). Search: `cv2.CAP_PROP_FRAME_COUNT`, `argparse subparsers`.
-
-Prepares for Framewise week 1.

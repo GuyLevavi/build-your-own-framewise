@@ -32,5 +32,3 @@ Until now "it passes" meant "it passed on my machine, today". A pipeline runs th
 - [CI/CD YAML syntax reference](https://docs.gitlab.com/ci/yaml/): `stages`, `default`, `cache:key:files`, `services`, `rules`.
 - [Using uv in GitLab CI/CD](https://docs.astral.sh/uv/guides/integration/gitlab/).
 - Search: `gitlab merge request pipeline`, `protected branch pipelines must succeed`.
-
-Prepares for Framewise week 3.

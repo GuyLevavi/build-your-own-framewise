@@ -30,5 +30,3 @@ Until now a job failed because of its input (stage 2's bad files) or because the
 - Google SRE book, ["Handling Overload"](https://sre.google/sre-book/handling-overload/) (retries and their budgets) and AWS's ["Timeouts, retries, and backoff with jitter"](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/).
 - `urllib.request.urlopen(..., timeout=...)` and `urllib.error.HTTPError.code`.
 - Search: `retryable vs non-retryable http status`, `exponential backoff jitter`, `circuit breaker pattern`.
-
-Prepares for Framewise week 5.

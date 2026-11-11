@@ -22,5 +22,3 @@ The obvious version (the parent decodes each frame and sends it to a pool) runs 
 - [`multiprocessing`](https://docs.python.org/3/library/multiprocessing.html) (Pool, contexts and start methods) and [`concurrent.futures`](https://docs.python.org/3/library/concurrent.futures.html).
 - Amdahl's law; David Beazley's talk "Understanding the Python GIL".
 - Search: `cv2 CAP_PROP_POS_FRAMES seek`, `multiprocessing spawn vs fork threads`, `pickle cost numpy array`.
-
-Prepares for Framewise week 10.

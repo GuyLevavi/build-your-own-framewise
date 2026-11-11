@@ -61,46 +61,46 @@ starter as a wheel.
 
 ## Stages
 
-| # | Slug | Stage | What breaks | Framewise week |
-| --- | --- | --- | --- | --- |
-| 1 | pb1 | Probe a video | | 1 |
-| 2 | pb2 | Fail cleanly | errors become a type | 1 |
-| 3 | an1 | Analyze a clip | | 2 |
-| 4 | an2 | Analyze a long clip | lists of frames → generators (memory budget) | 2 |
-| 5 | an3 | Profiles in YAML | flags → validated config | 2 |
-| 6 | ap1 | Upload a video | bodies streamed to disk | 3 |
-| 7 | ap2 | Run jobs | analysis off the request path | 3 |
-| 8 | ap3 | Survive a restart | in-memory state → Postgres repository, migrations | 4 |
-| 9 | wk1 | Separate the worker | thread → `work` process, the DB is the queue | 4 |
-| 10 | wk2 | Many workers | `FOR UPDATE` → `SKIP LOCKED` | 4 |
-| 11 | wk3 | Crashed workers | claims get leases, heartbeats, attempts | 4, 8 |
-| 12 | wk4 | Stop gracefully | SIGTERM, give the job back | 8 |
-| 13 | rs1 | Store detections | analysis split into frames and consumers; batches; an index | 4, 10 |
-| 14 | rs2 | Events in SQL | gaps-and-islands with window functions | 10 |
-| 15 | rs3 | Retries without duplicates | idempotent writes; episodes keyed by what they are | 4, 8, 10 |
-| 16 | pf1 | Downscale | one function owns detector size (fps budget) | 5, 10 |
-| 17 | pf2 | Use every core | process pool over frame ranges (speed-up and memory budget) | 10 |
-| 18 | pf3 | When a process dies | `Pool` hangs; executor + attempts | 10 |
-| 19 | md1 | Call a model server | the detector becomes a setting; RGB, model size, its own contract | 2, 5 |
-| 20 | md2 | Batch and pipeline | one frame at a time → batches in flight, with backpressure (fps and memory budget) | 5, 10 |
-| 21 | md3 | When the model server fails | timeouts, retry policy, failing a job clearly | 5 |
-| 22 | op1 | Metrics and logs | Prometheus, fps per job, JSON logs with context | 8 |
-| 23 | op2 | Live progress | SSE + LISTEN/NOTIFY | 10 |
-| 24 | op3 | Survive a database outage | liveness vs readiness, 503s, backoff | 8 |
-| 25 | hd1 | API keys | constant-time comparison, one auth layer | 10 |
-| 26 | ci1 | Gate merges | "passes on my machine" → a pipeline on a clean clone | 3 |
-| 27 | im1 | Build an image | a checkout as you → an image as a random UID, PID 1 | 7 |
-| 28 | im2 | Run the pod | startup order, `--host`, config from a ConfigMap | 7, 8 |
-| 29 | hm1 | Chart it | one pod → Deployments, Service, Route, Secret, RWX claim | 8 |
-| 30 | hm2 | Release by commit | `helm upgrade` by hand → a commit Argo CD syncs | 9 |
+| # | Slug | Stage | What breaks |
+| --- | --- | --- | --- |
+| 1 | pb1 | Probe a video | |
+| 2 | pb2 | Fail cleanly | errors become a type |
+| 3 | an1 | Analyze a clip | |
+| 4 | an2 | Analyze a long clip | lists of frames → generators (memory budget) |
+| 5 | an3 | Profiles in YAML | flags → validated config |
+| 6 | ap1 | Upload a video | bodies streamed to disk |
+| 7 | ap2 | Run jobs | analysis off the request path |
+| 8 | ap3 | Survive a restart | in-memory state → Postgres repository, migrations |
+| 9 | wk1 | Separate the worker | thread → `work` process, the DB is the queue |
+| 10 | wk2 | Many workers | `FOR UPDATE` → `SKIP LOCKED` |
+| 11 | wk3 | Crashed workers | claims get leases, heartbeats, attempts |
+| 12 | wk4 | Stop gracefully | SIGTERM, give the job back |
+| 13 | rs1 | Store detections | analysis split into frames and consumers; batches; an index |
+| 14 | rs2 | Events in SQL | gaps-and-islands with window functions |
+| 15 | rs3 | Retries without duplicates | idempotent writes; episodes keyed by what they are |
+| 16 | pf1 | Downscale | one function owns detector size (fps budget) |
+| 17 | pf2 | Use every core | process pool over frame ranges (speed-up and memory budget) |
+| 18 | pf3 | When a process dies | `Pool` hangs; executor + attempts |
+| 19 | md1 | Call a model server | the detector becomes a setting; RGB, model size, its own contract |
+| 20 | md2 | Batch and pipeline | one frame at a time → batches in flight, with backpressure (fps and memory budget) |
+| 21 | md3 | When the model server fails | timeouts, retry policy, failing a job clearly |
+| 22 | op1 | Metrics and logs | Prometheus, fps per job, JSON logs with context |
+| 23 | op2 | Live progress | SSE + LISTEN/NOTIFY |
+| 24 | op3 | Survive a database outage | liveness vs readiness, 503s, backoff |
+| 25 | hd1 | API keys | constant-time comparison, one auth layer |
+| 26 | ci1 | Gate merges | "passes on my machine" → a pipeline on a clean clone |
+| 27 | im1 | Build an image | a checkout as you → an image as a random UID, PID 1 |
+| 28 | im2 | Run the pod | startup order, `--host`, config from a ConfigMap |
+| 29 | hm1 | Chart it | one pod → Deployments, Service, Route, Secret, RWX claim |
+| 30 | hm2 | Release by commit | `helm upgrade` by hand → a commit Argo CD syncs |
 
 Performance targets are relative to the same machine (calibrated in the same test), so they hold on
 a laptop, the pod or CI; pf2 needs at least 2 CPUs. The md stages' targets come from the tester's
 own model server, whose cost per request is fixed. That server is a stand-in for Triton (the KServe
 v2 HTTP protocol, binary tensors, `max_batch_size` and `instance_group` in its config) with the same
-coloured-box rule as fwdetect, so the learner meets Triton's contract before the real one in
-week 5. Not covered here: YOLO itself and its pre- and post-processing (week 5), the evaluation gate
-(6), pushing to Quay, the live cluster, Splunk and Argo CD's sync (7-9). The delivery stages check
+coloured-box rule as fwdetect, so the learner meets Triton's contract before the real one. Not
+covered here: YOLO itself and its pre- and post-processing, the evaluation gate, pushing to Quay,
+the live cluster, Splunk and Argo CD's sync. The delivery stages check
 everything up to those: the pipeline's jobs, the image, the pod, the rendered chart and the release
 commit. The assignment covers the rest.
 
@@ -108,8 +108,8 @@ commit. The assignment covers the rest.
 
 `REVIEWING.md` has the reviewer's fast track (`tools/fast_track.sh` starts any stage from the
 previous reference solution), the per-stage brief (`tools/brief.py`: the task, what the reference
-built, what to review and the Framewise assignment weeks behind the stage) and what to look for in
-each stage beyond passing.
+built, what to review and what the stage points to) and what to look for in each stage beyond
+passing.
 
 ## Repo layout
 
@@ -126,7 +126,7 @@ each stage beyond passing.
 | `tools/verify_course.sh` | prove every stage: solution N passes 1..N, solution N-1 fails stage N |
 | `tools/compile.sh` | regenerate the compiled starter, the solutions' boilerplate and the diffs |
 | `tools/fast_track.sh` | the reviewer's fast track |
-| `tools/brief.py` | the reviewer's brief for a stage (reads `../framewise/ASSIGNMENTS.md` when present) |
+| `tools/brief.py` | the reviewer's brief for a stage |
 | `tools/make_release.sh` | the airgap tarballs |
 | `.gitlab-ci.yml` | this repo's own pipeline: shell checks, `compile.sh` is clean, `verify_course.sh` |
 

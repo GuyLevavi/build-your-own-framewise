@@ -25,5 +25,3 @@ If your handlers reached into a module-level dict, every one of them changes now
 
 - [SQLAlchemy Unified Tutorial](https://docs.sqlalchemy.org/en/20/tutorial/index.html) (engine, transactions, Core or ORM) and the [Alembic tutorial](https://alembic.sqlalchemy.org/en/latest/tutorial.html). `alembic.command.upgrade` runs migrations from Python.
 - Search: `postgresql+psycopg URL`, `alembic version_table_schema`, `CREATE SCHEMA`.
-
-Prepares for Framewise week 4.
