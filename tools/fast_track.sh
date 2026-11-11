@@ -7,7 +7,11 @@
 # delivery stages, tests/, .gitlab-ci.yml, Containerfile, .containerignore and deploy/) is replaced
 # by the reference solution of the stage before STAGE_SLUG (the starter's, for the first stage), so
 # you can do just STAGE_SLUG, then compare with that stage's reference diff. Commit first if DIR
-# holds work you want to keep.
+# holds work you want to keep. If DIR is a solution repo (it has a .stage, like
+# codecrafters-framewise-python), .stage becomes STAGE_SLUG, so its ./test.sh runs up to it.
+#
+# Last, it prints the stage's brief (tools/brief.py): the task, what the reference built, what to
+# look for in review and the Framewise assignment weeks behind it. Set FAST_TRACK_BRIEF=0 to skip it.
 set -euo pipefail
 
 course_dir="$(cd "$(dirname "$0")/.." && pwd)"
@@ -23,6 +27,7 @@ done
 
 if [[ ! -d "$dir" ]]; then
   cp -r "$course_dir/compiled_starters/python" "$dir"
+  chmod -R u+w "$dir" # the course may be read-only (a nix store path)
   echo "created $dir from the starter"
 fi
 if [[ "$n" == 1 ]]; then
@@ -35,8 +40,13 @@ for name in app tests .gitlab-ci.yml Containerfile .containerignore deploy; do
   if [[ -e "$from/$name" ]]; then
     rm -rf "${dir:?}/$name"
     cp -r "$from/$name" "$dir/$name"
+    chmod -R u+w "$dir/$name"
+  else
+    # Not written yet at that stage (going back from a later one leaves it behind otherwise).
+    rm -rf "${dir:?}/$name"
   fi
 done
+[[ -f "$dir/.stage" ]] && echo "$slug" >"$dir/.stage"
 if [[ "$n" == 1 ]]; then
   echo "$dir/app is now the starter's"
 else
@@ -44,5 +54,20 @@ else
 fi
 echo
 echo "Your stage:     $course_dir/stage_descriptions/base-$(printf %02d "$n")-$slug.md"
-echo "Test it:        $course_dir/tools/run_tests.sh $dir $slug"
+if [[ -f "$dir/.stage" && -x "$dir/test.sh" ]]; then
+  echo "Test it:        (cd $dir && ./test.sh)"
+else
+  echo "Test it:        $course_dir/tools/run_tests.sh $dir $slug"
+fi
 echo "Then compare:   $course_dir/solutions/python/$(printf %02d "$n")-$slug/diff/"
+echo "The brief:      $course_dir/tools/brief.py $slug [--full] [--diff]"
+
+if [[ "${FAST_TRACK_BRIEF:-1}" != 0 ]]; then
+  # From the attempt's directory, so the brief finds a framewise clone next to it.
+  if [[ -t 1 ]]; then
+    (cd "$dir" && python3 "$course_dir/tools/brief.py" "$slug" | "${PAGER:-less}")
+  else
+    echo
+    (cd "$dir" && python3 "$course_dir/tools/brief.py" "$slug")
+  fi
+fi

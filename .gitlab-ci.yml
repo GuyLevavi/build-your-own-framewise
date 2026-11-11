@@ -3,7 +3,7 @@
 # solutions, stages or tools change, and on a schedule.
 #
 # Project variables (Settings > CI/CD > Variables):
-#   CI_IMAGE         an image with bash, git and diffutils (the uv CI image will do)
+#   CI_IMAGE         an image with bash, git, diffutils and python3 (the uv CI image will do)
 #   TESTER_REPO_URL  the framewise-tester repository on this GitLab, without credentials,
 #                    e.g. https://gitlab.example.internal/team/framewise-tester.git
 #   FRAMEWISE_TEST_DATABASE_URL  optional: a Postgres the tester may create databases on;
@@ -34,6 +34,8 @@ scripts:
   image: ${CI_IMAGE}
   script:
     - for f in tools/*.sh; do bash -n "$f"; done
+    # The reviewer's brief must render for every stage.
+    - for s in $(awk '/^stages:/{s=1} s && /^  - slug:/{gsub(/"/,"",$3); print $3}' course-definition.yml); do python3 tools/brief.py "$s" >/dev/null; done
     # One stage text and one reference solution per stage in course-definition.yml.
     - stages=$(awk '/^stages:/{s=1} s && /^  - slug:/' course-definition.yml | wc -l)
     - test "$stages" = "$(ls stage_descriptions | wc -l)"
