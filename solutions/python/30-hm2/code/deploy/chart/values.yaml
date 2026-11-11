@@ -1,0 +1,20 @@
+# Defaults. Each environment overrides what differs in its own values file.
+image:
+  repository: quay.example.internal/framewise/framewise
+  tag: latest                       # each environment pins a commit SHA in its values file
+api:
+  replicas: 1
+  resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {cpu: "1", memory: 1Gi}}
+worker:
+  replicas: 3
+  resources: {requests: {cpu: 500m, memory: 1Gi}, limits: {cpu: "2", memory: 2Gi}}
+databaseSecret: framewise-db        # Secret with key DATABASE_URL, created outside Git
+apiKeySecret: framewise-api-key     # Secret with key FRAMEWISE_API_KEY, created outside Git
+storage:
+  size: 20Gi
+  storageClassName: ""              # must offer ReadWriteMany: API and workers share videos
+route:
+  host: ""                          # empty: OpenShift generates one
+profiles:
+  default: {every: 1, max_gap_s: 0.5, labels: [person, car, bicycle]}
+  traffic: {every: 5, max_gap_s: 1.0, labels: [person, car]}

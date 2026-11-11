@@ -1,0 +1,5 @@
+# Nonprod overrides. The pipeline's deploy job commits a new image.tag here; Argo CD syncs it.
+image:
+  tag: latest
+worker:
+  replicas: 2

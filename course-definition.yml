@@ -183,3 +183,34 @@ stages:
     difficulty: easy
     marketing_md: |-
       In this stage, you'll protect the API with a key, compared the way secrets should be.
+
+  # Ship it: Framewise weeks 3, 7, 8 and 9, checked on this machine with podman, helm and git
+  - slug: "ci1"
+    name: "Gate merges"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll write the GitLab pipeline that stops a broken merge request.
+
+  - slug: "im1"
+    name: "Build an image"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll package the service as one small image that runs as any user.
+
+  - slug: "im2"
+    name: "Run the pod"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll run the API, a worker and Postgres together with podman kube play.
+
+  - slug: "hm1"
+    name: "Chart it"
+    difficulty: hard
+    marketing_md: |-
+      In this stage, you'll write the Helm chart that runs Framewise in OpenShift.
+
+  - slug: "hm2"
+    name: "Release by commit"
+    difficulty: medium
+    marketing_md: |-
+      In this stage, you'll make a release a Git commit that Argo CD syncs and a revert undoes.

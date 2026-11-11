@@ -1,10 +1,11 @@
 # Build your own Framewise
 
 A CodeCrafters-style course for a junior backend developer, alongside the Framewise assignment
-(`../framewise/ASSIGNMENTS.md`). In 25 stages, each checked by a black-box tester, the learner
+(`../framewise/ASSIGNMENTS.md`). In 30 stages, each checked by a black-box tester, the learner
 grows a Python CLI into a video-analysis service: an API, a Postgres job queue with workers that
 survive crashes, results queried in SQL, multi-process performance work, a model server called
-over Triton's HTTP protocol, metrics, live progress and outage handling.
+over Triton's HTTP protocol, metrics, live progress and outage handling. The last five ship it: a
+GitLab pipeline that gates merges, an image, a pod, a Helm chart and a release that is a Git commit.
 
 Computer vision is a black box here. The detector, `fwdetect`, is a small NumPy wheel in
 `packages/fwdetect/` with a written contract: three labels, a cost that grows with pixels and holds
@@ -39,13 +40,24 @@ the tester creates a `fw_test_*` database per stage and drops it afterwards. Uns
 own with podman. SQL in the solutions sticks to PostgreSQL 14 features; the default image is
 `postgres:18`.
 
+### The delivery stages (ci1 to hm2)
+
+Stages 26 to 30 need `podman`, `helm` (hm1, hm2) and `git` on the machine, as the assignment's
+workstation has. They run your pipeline's jobs in containers, build and run your image, play your
+pod and render your chart, so in container mode `tools/run_tests.sh` runs them with the tester on
+the host, after the other stages. The images they use: `FRAMEWISE_CI_IMAGE` (the CI job image) and
+`FRAMEWISE_BASE_IMAGE` (the Containerfile's `BASE_IMAGE`) both default to
+`ghcr.io/astral-sh/uv:python3.12-bookworm-slim`, and the pod's Postgres image must be loaded. On the
+twentyx pod, which has no podman, run them on a workstation.
+
 ### Airgapped networks
 
 `tools/make_release.sh` builds two tarballs: one for the learner (no solutions) and one for the
 reviewer. Each holds the course, the tester as a static binary and as source with vendored Go
 modules, and with `IMAGES=1` the two container images (`postgres:18`,
-`ghcr.io/astral-sh/uv:python3.12-bookworm-slim`). Python dependencies come from the package index the
-network mirrors; `fwdetect` is vendored in the starter as a wheel.
+`ghcr.io/astral-sh/uv:python3.12-bookworm-slim`), and with `HELM=/path/to/helm` a static helm binary.
+Python dependencies come from the package index the network mirrors; `fwdetect` is vendored in the
+starter as a wheel.
 
 ## Stages
 
@@ -76,6 +88,11 @@ network mirrors; `fwdetect` is vendored in the starter as a wheel.
 | 23 | op2 | Live progress | SSE + LISTEN/NOTIFY | 10 |
 | 24 | op3 | Survive a database outage | liveness vs readiness, 503s, backoff | 8 |
 | 25 | hd1 | API keys | constant-time comparison, one auth layer | 10 |
+| 26 | ci1 | Gate merges | "passes on my machine" → a pipeline on a clean clone | 3 |
+| 27 | im1 | Build an image | a checkout as you → an image as a random UID, PID 1 | 7 |
+| 28 | im2 | Run the pod | startup order, `--host`, config from a ConfigMap | 7, 8 |
+| 29 | hm1 | Chart it | one pod → Deployments, Service, Route, Secret, RWX claim | 8 |
+| 30 | hm2 | Release by commit | `helm upgrade` by hand → a commit Argo CD syncs | 9 |
 
 Performance targets are relative to the same machine (calibrated in the same test), so they hold on
 a laptop, the pod or CI; pf2 needs at least 2 CPUs. The md stages' targets come from the tester's
@@ -83,7 +100,9 @@ own model server, whose cost per request is fixed. That server is a stand-in for
 v2 HTTP protocol, binary tensors, `max_batch_size` and `instance_group` in its config) with the same
 coloured-box rule as fwdetect, so the learner meets Triton's contract before the real one in
 week 5. Not covered here: YOLO itself and its pre- and post-processing (week 5), the evaluation gate
-(6), and images, OpenShift and Argo CD (7-9). The assignment covers them.
+(6), pushing to Quay, the live cluster, Splunk and Argo CD's sync (7-9). The delivery stages check
+everything up to those: the pipeline's jobs, the image, the pod, the rendered chart and the release
+commit. The assignment covers the rest.
 
 ## Reviewing
 
@@ -98,7 +117,7 @@ previous reference solution) and what to look for in each stage beyond passing.
 | `stage_descriptions/` | one Markdown file per stage: task, expected behaviour, tests, the refactor, pointers |
 | `starter_templates/` | the source of the starter; `compiled_starters/python` is generated from it |
 | `solutions/python/NN-slug/code` | reference solution for each stage (passes it and all earlier ones) |
-| `solutions/python/NN-slug/diff` | what that stage changed in `app/` |
+| `solutions/python/NN-slug/diff` | what that stage changed in the learner's files (`app/`, and from ci1 `tests/`, `.gitlab-ci.yml`, `Containerfile`, `deploy/`) |
 | `packages/fwdetect/` | the detector, built into the wheel in `starter_templates/python/code/vendor/` |
 | `dockerfiles/python-3.12.Dockerfile` | the image programs run in (container mode) |
 | `tools/run_tests.sh` | run the tester against one directory |
@@ -106,6 +125,7 @@ previous reference solution) and what to look for in each stage beyond passing.
 | `tools/compile.sh` | regenerate the compiled starter, the solutions' boilerplate and the diffs |
 | `tools/fast_track.sh` | the reviewer's fast track |
 | `tools/make_release.sh` | the airgap tarballs |
+| `.gitlab-ci.yml` | this repo's own pipeline: shell checks, `compile.sh` is clean, `verify_course.sh` |
 
 ## Checking the course itself
 

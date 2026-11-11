@@ -1,0 +1,17 @@
+--- a/deploy/chart/templates/migrate-job.yaml
++++ b/deploy/chart/templates/migrate-job.yaml
+@@ -1,9 +1,13 @@
+-# Applies the schema. Run it before the Deployments: helm upgrade --install, then wait for it.
++# Applies the schema before Argo CD rolls out new pods: a PreSync hook runs, and must
++# succeed, before anything else in the sync. A failed migration stops the release.
+ apiVersion: batch/v1
+ kind: Job
+ metadata:
+   name: {{ .Release.Name }}-migrate-{{ .Values.image.tag | trunc 12 | trimSuffix "-" }}
+   labels: {{- include "framewise.labels" . | nindent 4 }}
++  annotations:
++    argocd.argoproj.io/hook: PreSync
++    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+ spec:
+   backoffLimit: 1
+   template:

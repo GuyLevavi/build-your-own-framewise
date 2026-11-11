@@ -1,0 +1,58 @@
+--- a/deploy/pod.yaml
++++ b/deploy/pod.yaml
+@@ -0,0 +1,55 @@
++# The whole app on the workstation, the same kind of YAML OpenShift reads next.
++#   podman build -t framewise .            (the image this pod runs: localhost/framewise:latest)
++#   podman kube play --replace deploy/pod.yaml
++#   curl localhost:8000/health
++#   podman kube down deploy/pod.yaml
++apiVersion: v1
++kind: ConfigMap
++metadata:
++  name: framewise-profiles
++data:
++  profiles.yaml: |
++    profiles:
++      default:
++        every: 1
++        max_gap_s: 0.5
++        labels: [person, car, bicycle]
++---
++apiVersion: v1
++kind: Pod
++metadata:
++  name: framewise
++spec:
++  restartPolicy: Always            # a crashed container comes back, as in the cluster
++  containers:
++    - name: postgres
++      image: docker.io/library/postgres:18
++      env:
++        - {name: POSTGRES_PASSWORD, value: postgres}   # local only; the cluster uses a Secret
++    - name: api
++      image: localhost/framewise:latest
++      # Postgres starts with the pod, so wait for it and migrate before serving (the worker
++      # does the same; a second migrate finds nothing to do). exec makes the server the
++      # container's main process, so SIGTERM reaches it. Containers in a pod share one
++      # network: Postgres is on localhost, and the server listens on 0.0.0.0 to be published.
++      command: [sh, -c]
++      args: ["until python -m app.main migrate; do sleep 1; done; exec python -m app.main serve --host 0.0.0.0 --port 8000 --data-dir /data"]
++      ports:
++        - {containerPort: 8000, hostPort: 8000}
++      env: &app-env
++        - {name: DATABASE_URL, value: "postgresql://postgres:postgres@localhost:5432/postgres"}
++        - {name: FRAMEWISE_PROFILES, value: /etc/framewise/profiles.yaml}
++      volumeMounts: &app-mounts
++        - {name: profiles, mountPath: /etc/framewise}
++        - {name: data, mountPath: /data}
++    - name: worker
++      image: localhost/framewise:latest
++      command: [sh, -c]
++      args: ["until python -m app.main migrate; do sleep 1; done; exec python -m app.main work"]
++      env: *app-env
++      volumeMounts: *app-mounts
++  volumes:
++    - name: profiles
++      configMap: {name: framewise-profiles}
++    - name: data
++      emptyDir: {}                 # API and worker share uploads; gone with the pod

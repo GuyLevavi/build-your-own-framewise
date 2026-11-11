@@ -1,0 +1,22 @@
+"""job speed
+
+Revision ID: 0005
+"""
+
+import sqlalchemy as sa
+from alembic import op
+
+revision = "0005"
+down_revision = "0004"
+
+
+def upgrade() -> None:
+    # Frames analyzed and the seconds it took: frames per second is what the
+    # team judges a video pipeline by.
+    op.add_column("jobs", sa.Column("frames", sa.Integer), schema="queue")
+    op.add_column("jobs", sa.Column("analysis_s", sa.Float), schema="queue")
+
+
+def downgrade() -> None:
+    op.drop_column("jobs", "analysis_s", schema="queue")
+    op.drop_column("jobs", "frames", schema="queue")

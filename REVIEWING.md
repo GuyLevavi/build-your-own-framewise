@@ -53,6 +53,11 @@ passing, check:
 | op2 ★ | NOTIFY in the batch's transaction; LISTEN before the first read; async endpoint with its own connection. |
 | op3 ★ | 503 via one exception handler; liveness vs readiness; worker backs off and never records a job FAILED for a DB blip. |
 | hd1 | `hmac.compare_digest`; one place that applies auth; the key not in logs or reprs. |
+| ci1 | Cheap stages first; `cache:key:files: [uv.lock]`; `uv sync --locked`, not a bare install; tests that test logic, not a smoke test written for the gate. Ask where the pipeline would get packages from on the airgapped network. |
+| im1 ★ | Dependencies installed before `COPY app` (layer reuse); exec-form `ENTRYPOINT`; nothing written at startup; ask them to show the size against a single-stage build. |
+| im2 | Waiting for Postgres in the pod, not a `sleep`; `--host` with a safe default; the pod YAML reads like the manifests that come next. |
+| hm1 ★ | Liveness on `/health`, readiness on `/ready`, and they can say why; a checksum annotation so a ConfigMap change rolls the pods; nothing secret in values files. |
+| hm2 ★ | `[skip ci]` and why; the deploy job touches only the tag; PreSync for migrations; ask what a failed sync looks like against an unhealthy app. The live part (Quay push, Argo sync, a revert in nonprod) is week 9 with devops. |
 
 ## Things the tester can't check
 

@@ -1,0 +1,25 @@
+"""Grouping sightings into segments: the logic every job's labels come from."""
+
+from app.analysis import presence
+from app.profiles import Profile
+
+
+def test_close_sightings_join_into_one_segment() -> None:
+    profile = Profile(max_gap_s=0.5)
+    sightings = [(0.0, {"car"}), (0.4, {"car"}), (0.8, {"car"})]
+    assert presence(sightings, profile) == {"car": [{"start_s": 0.0, "end_s": 0.8}]}
+
+
+def test_a_gap_longer_than_max_gap_splits_the_segment() -> None:
+    profile = Profile(max_gap_s=0.5)
+    sightings = [(0.0, {"car"}), (0.2, {"car"}), (1.0, {"car"})]
+    assert presence(sightings, profile) == {
+        "car": [{"start_s": 0.0, "end_s": 0.2}, {"start_s": 1.0, "end_s": 1.0}]
+    }
+
+
+def test_labels_outside_the_profile_are_dropped() -> None:
+    profile = Profile(labels=("person",))
+    assert presence([(0.0, {"person", "car"})], profile) == {
+        "person": [{"start_s": 0.0, "end_s": 0.0}]
+    }

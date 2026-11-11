@@ -1,0 +1,36 @@
+"""Logs as JSON lines: one object per line, so a log platform can search fields.
+
+Pass context with `extra`: log.info("took job", extra={"job_id": job.id}).
+Anything in `extra` becomes a field of its own.
+"""
+
+import json
+import logging
+import os
+import sys
+from datetime import UTC, datetime
+
+# The attributes every LogRecord has; anything else came from `extra`.
+_STANDARD = set(logging.makeLogRecord({}).__dict__) | {"message", "asctime"}
+
+
+class JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        entry = {
+            "time": datetime.fromtimestamp(record.created, UTC).isoformat(timespec="milliseconds"),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        entry.update({k: v for k, v in record.__dict__.items() if k not in _STANDARD})
+        if record.exc_info:
+            entry["exception"] = self.formatException(record.exc_info)
+        return json.dumps(entry, default=str)
+
+
+def setup() -> None:
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(JsonFormatter())
+    logging.basicConfig(
+        level=os.environ.get("FRAMEWISE_LOG_LEVEL", "INFO").upper(), handlers=[handler], force=True
+    )

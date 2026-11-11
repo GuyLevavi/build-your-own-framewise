@@ -1,0 +1,59 @@
+# The course's own pipeline. Merge requests get the quick checks; the full proof that every
+# stage is sound (verify_course.sh: solution N passes 1..N, solution N-1 fails stage N) runs when
+# solutions, stages or tools change, and on a schedule.
+#
+# Project variables (Settings > CI/CD > Variables):
+#   CI_IMAGE         an image with bash, git and diffutils (the uv CI image will do)
+#   TESTER_REPO_URL  the framewise-tester repository on this GitLab, without credentials,
+#                    e.g. https://gitlab.example.internal/team/framewise-tester.git
+#   FRAMEWISE_TEST_DATABASE_URL  optional: a Postgres the tester may create databases on;
+#                    unset, the tester starts its own with podman
+# The verify job needs a runner tagged `podman`: a shell executor on a machine like the learners'
+# workstation, with podman, helm, git, go and the course images loaded (postgres:18 and
+# ghcr.io/astral-sh/uv:python3.12-bookworm-slim, from the airgap tarball).
+
+stages: [check, verify]
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+generated-files:
+  stage: check
+  image: ${CI_IMAGE}
+  script:
+    # compile.sh derives the starter, the solutions' boilerplate and the diffs; a merge request
+    # that changes a source without running it leaves them stale.
+    - tools/compile.sh
+    - git diff --exit-code --stat || (echo "Run tools/compile.sh and commit the result" && exit 1)
+
+scripts:
+  stage: check
+  image: ${CI_IMAGE}
+  script:
+    - for f in tools/*.sh; do bash -n "$f"; done
+    # One stage text and one reference solution per stage in course-definition.yml.
+    - stages=$(awk '/^stages:/{s=1} s && /^  - slug:/' course-definition.yml | wc -l)
+    - test "$stages" = "$(ls stage_descriptions | wc -l)"
+    - test "$stages" = "$(ls -d solutions/python/*/ | wc -l)"
+
+verify:
+  stage: verify
+  tags: [podman]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - changes: [solutions/**/*, stage_descriptions/**/*, course-definition.yml, tools/**/*, dockerfiles/**/*, compiled_starters/**/*, starter_templates/**/*]
+  timeout: 3h
+  before_script:
+    # The tester lives in its own repo; run_tests.sh expects it next to this one.
+    - rm -rf ../framewise-tester
+    - git clone --depth 1 "https://gitlab-ci-token:${CI_JOB_TOKEN}@${TESTER_REPO_URL#https://}" ../framewise-tester
+    - make -C ../framewise-tester build
+  script:
+    - tools/verify_course.sh
+  artifacts:
+    when: always
+    paths: [tools/.verify/]
+    expire_in: 2 weeks

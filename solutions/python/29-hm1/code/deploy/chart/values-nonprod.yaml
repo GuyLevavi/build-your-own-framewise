@@ -1,0 +1,5 @@
+# Nonprod overrides.
+image:
+  tag: latest
+worker:
+  replicas: 2

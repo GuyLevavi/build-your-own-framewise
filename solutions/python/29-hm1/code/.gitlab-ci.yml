@@ -1,0 +1,29 @@
+# Every merge request runs lint and the tests; a red pipeline blocks the merge.
+# Project variable (Settings > CI/CD > Variables): CI_IMAGE, the CI job image in the registry,
+# with uv and Python 3.12. Packages come from the mirror the runner's network allows.
+default:
+  image: ${CI_IMAGE}
+  before_script:
+    - uv sync --locked
+
+variables:
+  UV_CACHE_DIR: .uv-cache        # inside the project, so the runner can cache it
+  UV_LINK_MODE: copy             # the cache and .venv are on different filesystems
+
+cache:
+  key:
+    files: [uv.lock]             # a new lock file starts a new cache
+  paths: [.uv-cache]
+
+stages: [lint, test]
+
+lint:
+  stage: lint
+  script:
+    - uv run ruff check .
+    - uv run ruff format --check .
+
+test:
+  stage: test
+  script:
+    - uv run python -m pytest -q tests   # -m puts the project on sys.path, so `import app` works

@@ -16,7 +16,13 @@
 #                built with `make build` there if missing)
 #   CPUS         CPU limit for the container (default: all CPUs, at most 4; the pf stages
 #                measure speed-ups across processes)
+#   FRAMEWISE_CI_IMAGE, FRAMEWISE_BASE_IMAGE, FRAMEWISE_POSTGRES_IMAGE
+#                images the delivery stages (ci1 on) use; defaults are in the airgap tarball
 #   (set `debug: true` in CODE_DIR/codecrafters.yml for verbose tester logs)
+#
+# The delivery stages (ci1, im1, im2, hm1, hm2) build images, run pods and render the chart
+# with podman, helm and git on this machine, as you would on a workstation. In container mode
+# they run after the others, with the tester on the host; they never run your program directly.
 set -euo pipefail
 
 course_dir="$(cd "$(dirname "$0")/.." && pwd)"
@@ -43,7 +49,10 @@ mapfile -t stages < <(awk '
   in_stages && /^    name:/ && slug != "" { gsub(/.*name: *"|".*/, ""); print slug "|" $0; slug = "" }
 ' "$course_dir/course-definition.yml")
 
+host_stages=" ci1 im1 im2 hm1 hm2 "
 json="["
+host_json="["
+core_json="["
 found=""
 for i in "${!stages[@]}"; do
   slug="${stages[$i]%%|*}"
@@ -51,14 +60,24 @@ for i in "${!stages[@]}"; do
   if [[ "$only" == "--only" && "$slug" != "$until" ]]; then
     continue
   fi
+  entry="{\"slug\":\"$slug\",\"tester_log_prefix\":\"stage-$((i + 1))\",\"title\":\"Stage $((i + 1)): $name\"}"
   [[ "$json" == "[" ]] || json+=","
-  json+="{\"slug\":\"$slug\",\"tester_log_prefix\":\"stage-$((i + 1))\",\"title\":\"Stage $((i + 1)): $name\"}"
+  json+="$entry"
+  if [[ "$host_stages" == *" $slug "* ]]; then
+    [[ "$host_json" == "[" ]] || host_json+=","
+    host_json+="$entry"
+  else
+    [[ "$core_json" == "[" ]] || core_json+=","
+    core_json+="$entry"
+  fi
   if [[ "$slug" == "$until" ]]; then
     found=1
     break
   fi
 done
 json+="]"
+host_json+="]"
+core_json+="]"
 if [[ -n "$until" && -z "$found" ]]; then
   echo "Unknown stage slug: $until" >&2
   exit 2
@@ -78,6 +97,23 @@ if [[ "${FRAMEWISE_RUNNER:-container}" == native ]]; then
     "$tester_dir/tester"
 fi
 
+# The delivery stages, with the tester on this machine.
+run_host_stages() {
+  [[ "$host_json" == "[]" ]] && return 0
+  cd "$code_dir"
+  env \
+    TESTER_DIR="$tester_dir" \
+    CODECRAFTERS_REPOSITORY_DIR="$code_dir" \
+    CODECRAFTERS_TEST_CASES_JSON="$host_json" \
+    CODECRAFTERS_RANDOM_SEED="${CODECRAFTERS_RANDOM_SEED:-}" \
+    "$tester_dir/tester"
+}
+
+if [[ "$core_json" == "[]" ]]; then
+  run_host_stages
+  exit
+fi
+
 engine="$(command -v podman || command -v docker)"
 
 # The image holds only the dependencies, keyed by the dependency files, so code changes need no rebuild.
@@ -93,16 +129,17 @@ if ! "$engine" image exists "$image" 2>/dev/null; then
   rm -rf "$context"
 fi
 
-exec "$engine" run --rm \
+"$engine" run --rm \
   --cpus "${CPUS:-$(( $(nproc) < 4 ? $(nproc) : 4 ))}" --memory 4g \
   -v "$code_dir:/app:z" \
   -v "$tester_dir:/var/opt/tester:ro,z" \
   -e TESTER_DIR=/var/opt/tester \
   -e PYTHONDONTWRITEBYTECODE=1 \
   -e CODECRAFTERS_REPOSITORY_DIR=/app \
-  -e CODECRAFTERS_TEST_CASES_JSON="$json" \
+  -e CODECRAFTERS_TEST_CASES_JSON="$core_json" \
   -e CODECRAFTERS_RANDOM_SEED="${CODECRAFTERS_RANDOM_SEED:-}" \
   -e FRAMEWISE_TEST_DATABASE_URL="${FRAMEWISE_TEST_DATABASE_URL:-}" \
   --network host \
   -w /app \
-  "$image" /var/opt/tester/test.sh
+  "$image" /var/opt/tester/test.sh || exit
+run_host_stages

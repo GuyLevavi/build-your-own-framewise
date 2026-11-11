@@ -1,0 +1,8 @@
+--- a/deploy/chart/values-nonprod.yaml
++++ b/deploy/chart/values-nonprod.yaml
+@@ -1,4 +1,4 @@
+-# Nonprod overrides.
++# Nonprod overrides. The pipeline's deploy job commits a new image.tag here; Argo CD syncs it.
+ image:
+   tag: latest
+ worker:
