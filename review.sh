@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # The reviewer's fast track, with the course pinned in flake.lock (its tools/fast_track.sh and
-# tools/brief.py). Clone framewise next to this repo for the assignment part of the brief.
+# tools/brief.py).
 #
 #   ./review.sh <slug>                 app/ (and the delivery files) become the reference solution
 #                                      of the stage before <slug>, .stage becomes <slug>, and the
 #                                      brief opens (commit your work first)
-#   ./review.sh --brief [slug] [--full]  the brief: task, what the reference built, what to review,
-#                                      the Framewise weeks (default: current stage)
+#   ./review.sh --brief [slug]         the brief: task, what the reference built, what to review,
+#                                      what the stage points to (default: current stage)
 #   ./review.sh --diff [slug]          the brief with the reference diff
-#   ./review.sh --list                 every stage with its Framewise weeks and ★
+#   ./review.sh --list                 every stage, ★ on those worth doing yourself
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -18,7 +18,6 @@ fi
 course_dir="$FRAMEWISE_COURSE_DIR"
 current="$(cat "$here/.stage")"
 
-# Run from the repo, so the brief finds ../framewise.
 cd "$here"
 brief() {
   if [[ -t 1 ]]; then
