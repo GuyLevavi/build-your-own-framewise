@@ -47,3 +47,14 @@ make copy_course_file   # refresh internal/test_helpers/course_definition.yml
   finds fwdetect's coloured boxes in RGB frames. Each request costs a fixed latency plus a cost
   per frame, so md2's 160 frames/s target doesn't depend on the machine. It can answer 503,
   hang, refuse connections, or fail with 500 on a grey frame (md3).
+- **Delivery stages** (`stages_ship.go`, `gitlab_ci.go`, `engine.go`, `manifests.go`): ci1 to hm2
+  drive podman, helm and git on the machine instead of `./your_program.sh`. ci1 runs the jobs of
+  `.gitlab-ci.yml` up to the test stage the way a Docker-executor runner does (job image, services
+  in one pod, cache folders kept between runs, a fresh git clone as the workspace), three times:
+  as is, with a failing test planted, and with a lint error planted. im1 builds the Containerfile
+  with planted `.env`/`.git`/`.venv`/`tests` files, inspects the exported filesystem, and runs
+  `migrate`, `serve` and `work` from the image as UID 1000620000 in group 0. im2 runs
+  `podman kube play deploy/pod.yaml`, a job, a crashed worker and another job. hm1 lints and
+  renders the chart and checks the objects; hm2 runs the deploy job's script against a bare
+  repository that its push URL is rewritten to, then renders before, after and after a revert.
+  `FRAMEWISE_CI_IMAGE`, `FRAMEWISE_BASE_IMAGE` and `FRAMEWISE_POSTGRES_IMAGE` pick the images.

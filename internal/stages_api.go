@@ -124,8 +124,8 @@ func testUpload(harness *test_case_harness.TestCaseHarness) error {
 		harness.Logger.Successf("✓ 415 for %q", name)
 	}
 
-	before := groupRSS(s.p.pid)
-	sampler := sampleRSS(s.p.pid)
+	before := groupRSS(s.p.(*proc).pid)
+	sampler := sampleRSS(s.p.(*proc).pid)
 	r, err = s.uploadStream(word+".mp4", bigUploadBytes)
 	peak, _ := sampler.finish()
 	if err != nil {
