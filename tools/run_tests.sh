@@ -12,7 +12,7 @@
 #   FRAMEWISE_RUNNER  container (default) or native
 #   FRAMEWISE_TEST_DATABASE_URL  an existing Postgres for the database stages; the tester
 #                creates and drops its own databases there. Unset: the tester starts its own.
-#   TESTER_DIR   directory holding `tester` and `test.sh` (default: ../framewise-tester/dist,
+#   TESTER_DIR   directory holding `tester` and `test.sh` (default: tester/dist in this repo,
 #                built with `make build` there if missing)
 #   CPUS         CPU limit for the container (default: all CPUs, at most 4; the pf stages
 #                measure speed-ups across processes)
@@ -31,7 +31,7 @@ until="${2:-}"
 only="${3:-}"
 export CONTAINERS_REGISTRIES_CONF="${CONTAINERS_REGISTRIES_CONF:-$course_dir/tools/registries.conf}"
 
-tester_dir="${TESTER_DIR:-$course_dir/../framewise-tester/dist}"
+tester_dir="${TESTER_DIR:-$course_dir/tester/dist}"
 if [[ ! -x "$tester_dir/tester" ]]; then
   echo "Building the tester in $(dirname "$tester_dir") ..."
   if command -v go >/dev/null; then

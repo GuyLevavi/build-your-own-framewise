@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/GuyLevavi/framewise-tester/internal"
+	"github.com/GuyLevavi/build-your-own-framewise/tester/internal"
 )
 
 func main() {

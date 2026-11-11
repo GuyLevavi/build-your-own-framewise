@@ -8,6 +8,6 @@ build:
 test:
 	CGO_ENABLED=0 go test -count=1 ./...
 
-# Keep the embedded course definition in sync with the course repository.
+# Keep the embedded course definition in sync with the course (one directory up).
 copy_course_file:
-	cp ../build-your-own-framewise/course-definition.yml internal/test_helpers/course_definition.yml
+	cp ../course-definition.yml internal/test_helpers/course_definition.yml

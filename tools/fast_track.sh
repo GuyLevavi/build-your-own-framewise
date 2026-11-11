@@ -7,8 +7,8 @@
 # delivery stages, tests/, .gitlab-ci.yml, Containerfile, .containerignore and deploy/) is replaced
 # by the reference solution of the stage before STAGE_SLUG (the starter's, for the first stage), so
 # you can do just STAGE_SLUG, then compare with that stage's reference diff. Commit first if DIR
-# holds work you want to keep. If DIR is a solution repo (it has a .stage, like
-# codecrafters-framewise-python), .stage becomes STAGE_SLUG, so its ./test.sh runs up to it.
+# holds work you want to keep. If DIR has a .stage (attempts/python, which ./review.sh passes),
+# .stage becomes STAGE_SLUG, so ./test.sh runs up to it.
 #
 # Last, it prints the stage's brief (tools/brief.py): the task, what the reference built, what to
 # look for in review and what the stage points to. Set FAST_TRACK_BRIEF=0 to skip it.
@@ -54,8 +54,8 @@ else
 fi
 echo
 echo "Your stage:     $course_dir/stage_descriptions/base-$(printf %02d "$n")-$slug.md"
-if [[ -f "$dir/.stage" && -x "$dir/test.sh" ]]; then
-  echo "Test it:        (cd $dir && ./test.sh)"
+if [[ "$(cd "$dir" && pwd)" == "$course_dir/attempts/python" ]]; then
+  echo "Test it:        ./test.sh"
 else
   echo "Test it:        $course_dir/tools/run_tests.sh $dir $slug"
 fi

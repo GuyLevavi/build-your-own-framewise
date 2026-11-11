@@ -4,8 +4,9 @@
 #
 # Project variables (Settings > CI/CD > Variables):
 #   CI_IMAGE         an image with bash, git, diffutils and python3 (the uv CI image will do)
-#   TESTER_REPO_URL  the framewise-tester repository on this GitLab, without credentials,
-#                    e.g. https://gitlab.example.internal/team/framewise-tester.git
+#   GO_IMAGE         a Go 1.24 image in the registry, for the tester's jobs
+#   GOPROXY          the Go module mirror the network allows (or set GOFLAGS=-mod=vendor after
+#                    committing `go mod vendor` in tester/)
 #   FRAMEWISE_TEST_DATABASE_URL  optional: a Postgres the tester may create databases on;
 #                    unset, the tester starts its own with podman
 # The verify job needs a runner tagged `podman`: a shell executor on a machine like the learners'
@@ -41,18 +42,40 @@ scripts:
     - test "$stages" = "$(ls stage_descriptions | wc -l)"
     - test "$stages" = "$(ls -d solutions/python/*/ | wc -l)"
 
+# The tester (tester/): formatting, vet, and its unit tests (stages against the course definition,
+# clips against the numbers the stage descriptions quote).
+.go:
+  image: ${GO_IMAGE}
+  variables:
+    CGO_ENABLED: "0"
+    GOTOOLCHAIN: local             # never download a toolchain
+    GOPATH: ${CI_PROJECT_DIR}/.go  # inside the project, so the runner can cache modules
+    GOCACHE: ${CI_PROJECT_DIR}/.go-build
+  cache:
+    key:
+      files: [tester/go.sum]
+    paths: [.go/pkg/mod, .go-build]
+
+tester:
+  extends: .go
+  stage: check
+  script:
+    - cd tester
+    # The tester's copy of the course definition must be the course's.
+    - cmp ../course-definition.yml internal/test_helpers/course_definition.yml || (echo "Run make -C tester copy_course_file and commit the result" && exit 1)
+    - test -z "$(gofmt -l cmd internal/*.go)" || (gofmt -l cmd internal/*.go && exit 1)
+    - go vet ./...
+    - go test -count=1 ./...
+
 verify:
   stage: verify
   tags: [podman]
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
-    - changes: [solutions/**/*, stage_descriptions/**/*, course-definition.yml, tools/**/*, dockerfiles/**/*, compiled_starters/**/*, starter_templates/**/*]
+    - changes: [solutions/**/*, stage_descriptions/**/*, course-definition.yml, tools/**/*, dockerfiles/**/*, compiled_starters/**/*, starter_templates/**/*, tester/**/*]
   timeout: 3h
   before_script:
-    # The tester lives in its own repo; run_tests.sh expects it next to this one.
-    - rm -rf ../framewise-tester
-    - git clone --depth 1 "https://gitlab-ci-token:${CI_JOB_TOKEN}@${TESTER_REPO_URL#https://}" ../framewise-tester
-    - make -C ../framewise-tester build
+    - make -C tester build
   script:
     - tools/verify_course.sh
   artifacts:

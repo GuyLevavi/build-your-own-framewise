@@ -1,7 +1,6 @@
-# framewise-tester
+# The Framewise tester
 
-Tester for "Build your own Framewise" (course content in
-[build-your-own-framewise](https://github.com/GuyLevavi/build-your-own-framewise)). Built on
+Tester for "Build your own Framewise" (the course is the rest of this repo, one directory up). Built on
 CodeCrafters' [tester-utils](https://github.com/codecrafters-io/tester-utils), in the
 layout of [tester-template](https://github.com/codecrafters-io/tester-template).
 
@@ -12,15 +11,14 @@ Like every CodeCrafters tester, it takes no arguments and reads its run from
 `CODECRAFTERS_SKIP_ANTI_CHEAT` (`CODECRAFTERS_RANDOM_SEED` repeats a run). It runs
 `./your_program.sh` from that directory.
 
-Learners don't set these by hand: their solution repo
-([codecrafters-framewise-python](https://github.com/GuyLevavi/codecrafters-framewise-python))
-pins this repo as a flake input, builds it, and its `./test.sh` fills them in. The course
-repo's `tools/run_tests.sh` runs it in the course's Python image with podman instead.
+Learners don't set these by hand: the repo's `./test.sh` builds it with Nix (`.#tester`) and
+fills them in for `attempts/<lang>/`. Without Nix, `tools/run_tests.sh` builds it with `make build`
+and runs the program in the course's Python image with podman, or natively with uv.
 
 ```sh
 make build              # dist/tester and dist/test.sh (what course-sdk expects)
 make test               # stages match the course definition; clips match the stage texts
-make copy_course_file   # refresh internal/test_helpers/course_definition.yml
+make copy_course_file   # refresh internal/test_helpers/course_definition.yml from ../course-definition.yml
 ```
 
 ## How it tests

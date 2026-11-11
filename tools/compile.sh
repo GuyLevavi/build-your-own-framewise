@@ -22,6 +22,11 @@ cp -a starter_templates/python/code/.codecrafters "$starter/"
   sed -n '1,/^set -e/p' starter_templates/python/code/.codecrafters/run.sh |
     sed 's/This script is used to run your program on CodeCrafters/Use this script to run your program LOCALLY./'
   echo
+  echo '# In the nix dev shell (./test.sh python), Python and the dependencies come from nixpkgs:'
+  echo "# the opencv wheel uv would install doesn't run on NixOS."
+  echo 'if [ -n "${FRAMEWISE_NIX_PYTHON:-}" ]; then'
+  echo '  exec python -m app.main "$@"'
+  echo 'fi'
   grep '^exec ' starter_templates/python/code/.codecrafters/run.sh
 } >"$starter/your_program.sh"
 chmod +x "$starter/your_program.sh"

@@ -1,44 +1,47 @@
 #!/usr/bin/env bash
-# Run the Build your own Framewise tester locally.
+# Run the Build your own Framewise tester against your attempt in attempts/<lang>.
 #
-#   ./test.sh           all stages up to the one in .stage
-#   ./test.sh <slug>    a single stage
-#   ./test.sh --list    every stage in course order (* = current)
-#   ./test.sh --next    advance .stage to the following stage
-#   ./test.sh --show [slug]  print a stage's instructions (default: current)
+#   ./test.sh [lang]                all stages up to the one in attempts/<lang>/.stage
+#   ./test.sh [lang] <slug>         a single stage
+#   ./test.sh [lang] --list         every stage in course order (* = current)
+#   ./test.sh [lang] --next         advance .stage to the following stage
+#   ./test.sh [lang] --show [slug]  print a stage's instructions (default: current)
+#
+# lang can be left out while attempts/ holds a single language. The tests run in the flake's
+# devShell for that language (nix develop .#<lang>), with the tester built from ./tester.
 set -euo pipefail
 
-here="$(cd "$(dirname "$0")" && pwd)"
+root="$(cd "$(dirname "$0")" && pwd)"
+course="$root/course-definition.yml"
+
+mapfile -t langs < <(cd "$root/attempts" && ls -d */ 2>/dev/null | tr -d /)
+if [[ -n "${1:-}" && -d "$root/attempts/$1" ]]; then
+  lang="$1"
+  shift
+elif [[ ${#langs[@]} -eq 1 ]]; then
+  lang="${langs[0]}"
+else
+  echo "which language? ./test.sh <lang> ..., one of: ${langs[*]:-(none; start one with tools/start.sh <lang>)}" >&2
+  exit 2
+fi
+here="$root/attempts/$lang"
 stage_file="$here/.stage"
 
-# ---- challenge-specific (build-your-own-y PROTOCOL.md, "test.sh") ----------
-# The devShell exports ${prefix}_COURSE_DIR, ${prefix}_TESTER_BIN and ${prefix}_TESTER_SRC.
-prefix=FRAMEWISE
-# The flake whose devShell runs the tests.
-flake="$here"
-
+# ---- per-language part -------------------------------------------------------
 # Build up front with visible output so compile errors aren't buried in tester logs.
 build() {
   sh .codecrafters/compile.sh
 }
-
-# Anything the tester needs beyond the CODECRAFTERS_* variables. TESTER_DIR
-# defaults to the tester's source tree.
+# Anything the tester needs beyond the CODECRAFTERS_* variables.
 prepare() {
   :
 }
-# ---- end of challenge-specific part ------------------------------------------
+# ---- end of per-language part ------------------------------------------------
 
-tester_bin_var="${prefix}_TESTER_BIN"
-# Toolchain, course and tester all come from the devShell (pinned in flake.lock).
-if [[ -z "${!tester_bin_var:-}" ]]; then
-  exec nix develop "$flake" --command "$0" "$@"
+# Toolchain and tester come from the devShell (pinned in flake.lock).
+if [[ -z "${FRAMEWISE_TESTER_BIN:-}" ]]; then
+  exec nix develop "$root#$lang" --command "$0" "$lang" "$@"
 fi
-course_dir_var="${prefix}_COURSE_DIR"
-tester_src_var="${prefix}_TESTER_SRC"
-course_dir="${!course_dir_var}"
-course="$course_dir/course-definition.yml"
-TESTER_DIR="${!tester_src_var}"
 
 # "slug<TAB>name" per stage, in course order.
 stages() {
@@ -68,7 +71,7 @@ case "${1:-}" in
     exit 0
     ;;
   --show)
-    desc=("$course_dir"/stage_descriptions/*-"${2:-$current}".md)
+    desc=("$root"/stage_descriptions/*-"${2:-$current}".md)
     [[ -f "${desc[0]}" ]] || { echo "no instructions for stage '${2:-$current}'" >&2; exit 1; }
     # render-markdown needs a .md filetype, and leaves the course's inline <code> HTML raw.
     md="$(mktemp --suffix=.md)"
@@ -85,7 +88,7 @@ case "${1:-}" in
     exit 0
     ;;
   -*)
-    sed -n '2,8s/^# \{0,1\}//p' "$0" >&2
+    sed -n '2,11s/^# \{0,1\}//p' "$0" >&2
     exit 2
     ;;
   "")
@@ -97,7 +100,7 @@ case "${1:-}" in
 esac
 
 if [[ -z "$selected" ]]; then
-  echo "unknown stage '${1:-$current}' (see ./test.sh --list)" >&2
+  echo "unknown stage '${1:-$current}' (see ./test.sh $lang --list)" >&2
   exit 1
 fi
 
@@ -111,14 +114,14 @@ json="$(stages | awk -F'\t' -v sel="$(cut -f1 <<<"$selected" | paste -sd' ')" '
   }
 ')"
 
-# The tester runs from the repo, as CodeCrafters runs it from /app.
+# The tester runs from the attempt, as CodeCrafters runs it from /app.
 cd "$here"
 build
 prepare
 
 exec env \
-  TESTER_DIR="$TESTER_DIR" \
+  TESTER_DIR="$root/tester" \
   CODECRAFTERS_REPOSITORY_DIR="$here" \
   CODECRAFTERS_TEST_CASES_JSON="[$json]" \
   CODECRAFTERS_SKIP_ANTI_CHEAT=true \
-  "${!tester_bin_var}"
+  "$FRAMEWISE_TESTER_BIN"

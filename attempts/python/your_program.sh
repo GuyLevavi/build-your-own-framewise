@@ -2,15 +2,15 @@
 #
 # Use this script to run your program LOCALLY.
 #
-# Note: Changing this script WILL NOT affect how CodeCrafters runs your program.
+# This runs after .codecrafters/compile.sh
 #
 # Learn more: https://codecrafters.io/program-interface
 
-set -e # Exit early if any commands fail
+set -e # Exit on failure
 
-# Copied from .codecrafters/run.sh
-#
-# - Edit this to change how your program runs locally
-# - Edit .codecrafters/run.sh to change how your program runs remotely
-# Local: the devShell's Python has the dependencies (see flake.nix), so uv isn't used.
-exec python -m app.main "$@"
+# In the nix dev shell (./test.sh python), Python and the dependencies come from nixpkgs:
+# the opencv wheel uv would install doesn't run on NixOS.
+if [ -n "${FRAMEWISE_NIX_PYTHON:-}" ]; then
+  exec python -m app.main "$@"
+fi
+exec uv run --quiet -m app.main "$@"

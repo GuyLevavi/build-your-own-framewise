@@ -1,4 +1,4 @@
-module github.com/GuyLevavi/framewise-tester
+module github.com/GuyLevavi/build-your-own-framewise/tester
 
 go 1.24
 

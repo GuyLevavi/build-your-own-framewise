@@ -1,88 +1,44 @@
-# Build your own Framewise — Python (local)
+This is a starting point for Python solutions to the "Build your own Framewise"
+challenge, a local course in the CodeCrafters format.
 
-A solution to the [Build your own Framewise](https://github.com/GuyLevavi/build-your-own-framewise) challenge,
-tested locally against its tester.
-You don't need a CodeCrafters account.
+Framewise is a small video analytics service. You'll build it in 30 stages: a command-line tool
+that probes videos and finds motion in them, then an API with a Postgres job queue and workers,
+results in SQL, multi-process performance work, a model server, metrics, and last a pipeline, an
+image, a pod and a Helm chart that ship it.
 
-The repo is self-contained. The course repo
-([build-your-own-framewise](https://github.com/GuyLevavi/build-your-own-framewise))
-and the [framewise-tester](https://github.com/GuyLevavi/framewise-tester) are flake inputs, pinned in
-`flake.lock`. The tester is built from source as `.#framewise-tester`.
+# Running the tests
 
-```sh
-git clone https://github.com/GuyLevavi/codecrafters-framewise-python && cd codecrafters-framewise-python
-direnv allow         # or: nix develop
-./test.sh
-```
-
-## Dev shell
-
-`nix develop`, or direnv via `.envrc`, provides Python 3 with every dependency in `pyproject.toml`
-(including the course's `fwdetect`, built from the course input), ruff, py-spy, `psql`, helm and the tester.
-`test.sh` enters the dev shell by itself if needed.
-
-`nix flake update course tester` pulls newer upstream stages and tester fixes.
-
-## Stage instructions
+In the course repo this directory is `attempts/<language>/`. From the repo's root:
 
 ```sh
-./test.sh --show          # current stage
-./test.sh --show pb2      # any stage
+./test.sh                # every stage up to the one in .stage (Nix builds the tester and the toolchain)
+./test.sh pb2            # one stage
+./test.sh --show         # the current stage's instructions
+./test.sh --next         # move on, once it passes
 ```
 
-The files live in `$FRAMEWISE_COURSE_DIR/stage_descriptions/`. Stage order and
-names come from `$FRAMEWISE_COURSE_DIR/course-definition.yml`.
-
-## The delivery stages
-
-ci1 to hm2 build images, run a pod and render a Helm chart. helm comes from the dev shell; podman
-must be the system's (rootless podman needs setuid helpers nix can't install).
-
-## Postgres
-
-From stage ap1 the tester needs a Postgres server it may create databases on: set
-`FRAMEWISE_TEST_DATABASE_URL` (for example the team's hosted one), or have podman installed and the
-tester starts a throwaway `postgres:18` itself.
-
-## Fast track (reviewers)
+Without Nix, from the course repo, against any copy of this directory:
 
 ```sh
-./review.sh wk3          # app/ becomes the reference solution of wk2, .stage becomes wk3,
-                         # and the brief for wk3 opens
-./test.sh                # what the learner sees on wk3; do it yourself, or sketch it
-./review.sh --diff wk3   # then compare with the reference
-./review.sh --brief      # the current stage's brief again
-./review.sh --list       # every stage; ★ = worth doing yourself
+tools/run_tests.sh path/to/this/dir pb2           # stages 1..pb2, the program in a container
+FRAMEWISE_RUNNER=native tools/run_tests.sh path/to/this/dir pb2   # with uv on this machine
 ```
 
-For reviewers learning the course quickly: do one stage on top of the reference solution of the
-one before, with the same `./test.sh` a learner uses. It overwrites `app/` (and, for the delivery
-stages, `tests/`, `.gitlab-ci.yml`, `Containerfile`, `.containerignore` and `deploy/`), so commit first.
+Every run re-runs the earlier stages too, so a change can't silently break one. With
+`tools/run_tests.sh`, add `--only` to run one stage. The first container run builds an image with
+your dependencies, so it takes a minute or two.
 
-The brief is one page per stage: the task and why the design breaks, the files the reference
-changed and a map of the code so far, what to look for in review, and the stage's pointers. Both
-scripts come from the pinned course (`tools/fast_track.sh`, `tools/brief.py`); its
-`REVIEWING.md` has the full review notes.
+# Passing the first stage
 
-## Tests
+The entry point is `app/main.py`. Study and uncomment the code below the
+"Uncomment the code below" marker, then run the tests for stage 1.
 
-```sh
-./test.sh            # every stage up to the current one (stored in .stage)
-./test.sh <slug>     # one stage, e.g. ./test.sh pb2
-./test.sh --list     # all stages in order, * marks the current one
-./test.sh --next     # move .stage forward after passing
-```
+# Stage 2 and beyond
 
-The tester stops at the first failing stage. It runs `./your_program.sh`, which
-builds the program and then runs it.
+1. Read the next stage: `./test.sh --show`, or `stage_descriptions/` in the course repo.
+2. Change `app/main.py` (add modules under `app/` as you like).
+3. Run the tests.
 
-## Local deviations from the starter
-
-- `test.sh`, `.stage`, `flake.nix`, `flake.lock` and `.envrc` are local additions, and so is
-  `review.sh`, the reviewer's fast track.
-- `your_program.sh` runs `python -m app.main` instead of `uv run`: the devShell's Python
-  comes from nixpkgs with the dependencies in `pyproject.toml`, because the
-  `opencv-python-headless` wheel that uv would install doesn't run on NixOS. Versions follow
-  nixpkgs, not `uv.lock`. Scalene isn't in the dev shell; use py-spy here, or `uv run --group profile`
-  outside NixOS.
-
+To run your program by hand, use `./your_program.sh` with the same arguments the tests use, for
+example `./your_program.sh probe some.avi`. It uses `uv`, or the Nix dev shell's Python inside
+`nix develop .#python`.
