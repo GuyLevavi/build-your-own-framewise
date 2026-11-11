@@ -133,6 +133,9 @@ func availableCPUs() int {
 
 func testProcesses(harness *test_case_harness.TestCaseHarness) error {
 	n := detectProcesses()
+	if n < 2 {
+		return fmt.Errorf("this stage measures a speed-up across processes, and this machine (or its container's CPU quota) gives your program %d CPU. Run it where at least 2 are available: CPUS=2 or more for tools/run_tests.sh, or a pod with a CPU limit of 2", n)
+	}
 	tr := newTrace(harness)
 	dbURL, env, err := workerStage(harness, map[string]string{"FWDETECT_TRACE": tr.path, "FRAMEWISE_DETECT_PROCESSES": "1"})
 	if err != nil {
@@ -173,17 +176,13 @@ func testProcesses(harness *test_case_harness.TestCaseHarness) error {
 		pids[c.PID] = true
 	}
 	harness.Logger.Infof("%.0f frames/s with %d processes, %d of them calling the detector; the worker peaked at %.0f MiB", rate, n, len(pids), mib(peak))
-	if n < 2 {
-		harness.Logger.Infof("(this machine has one CPU: speed-up not checked)")
-	} else {
-		if len(pids) < n {
-			return fmt.Errorf("expected the detector to run in %d processes at once, it ran in %d", n, len(pids))
-		}
-		if target := speedupTarget(n); rate < target*single {
-			return fmt.Errorf("expected at least %.1fx the one-process rate with %d processes (%.0f frames/s), got %.0f (%.1fx). Profile the parent process: whatever it still does for every frame is your ceiling", target, n, target*single, rate, rate/single)
-		}
-		harness.Logger.Successf("✓ %.1fx faster with %d processes", rate/single, n)
+	if len(pids) < n {
+		return fmt.Errorf("expected the detector to run in %d processes at once, it ran in %d", n, len(pids))
 	}
+	if target := speedupTarget(n); rate < target*single {
+		return fmt.Errorf("expected at least %.1fx the one-process rate with %d processes (%.0f frames/s), got %.0f (%.1fx). Profile the parent process: whatever it still does for every frame is your ceiling", target, n, target*single, rate, rate/single)
+	}
+	harness.Logger.Successf("✓ %.1fx faster with %d processes", rate/single, n)
 	limit := int64(300+120*n) << 20
 	if peak > limit {
 		return fmt.Errorf("expected the worker and its processes to stay under %.0f MiB together, they peaked at %.0f MiB. Frames waiting for a process take memory; so do frames nobody reads yet", mib(limit), mib(peak))

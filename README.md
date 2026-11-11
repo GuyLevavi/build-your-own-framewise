@@ -41,3 +41,9 @@ make copy_course_file   # refresh internal/test_helpers/course_definition.yml
   `detail`. Stage ap5 times `POST /jobs` (< 2 s, still `PENDING`/`RUNNING`) and `GET /health`
   (< 1 s) while a 10 s 640×360 clip is analyzed three times; ap6 stops the server with
   SIGTERM and starts it again on the same `--data-dir`.
+- **Model server** (`modelserver.go`, `stages_model.go`): from md1 the tester runs a stand-in for
+  Triton on a free port and passes `FRAMEWISE_MODEL_URL`. It speaks the KServe v2 HTTP protocol
+  (JSON or binary tensors), publishes its input size, `max_batch_size` and `instance_group`, and
+  finds fwdetect's coloured boxes in RGB frames. Each request costs a fixed latency plus a cost
+  per frame, so md2's 160 frames/s target doesn't depend on the machine. It can answer 503,
+  hang, refuse connections, or fail with 500 on a grey frame (md3).
