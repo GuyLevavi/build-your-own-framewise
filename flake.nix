@@ -83,6 +83,9 @@
               uv
               ruff
               py-spy
+              # The delivery stages (ci1 to hm2) render the chart with helm. They also need podman,
+              # which comes from the system: rootless podman needs setuid helpers nix can't provide.
+              kubernetes-helm
               # psql, and a local server if you want one (the tester can also start its own
               # with podman, or use FRAMEWISE_TEST_DATABASE_URL).
               postgresql

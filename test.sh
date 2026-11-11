@@ -6,8 +6,6 @@
 #   ./test.sh --list    every stage in course order (* = current)
 #   ./test.sh --next    advance .stage to the following stage
 #   ./test.sh --show [slug]  print a stage's instructions (default: current)
-#   ./test.sh --skip-to <slug>  fast track: app/ becomes the reference solution of the stage
-#                     before <slug>, and .stage becomes <slug> (commit your work first)
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -86,26 +84,8 @@ case "${1:-}" in
     fi
     exit 0
     ;;
-  --skip-to)
-    target="${2:?usage: ./test.sh --skip-to <slug>}"
-    n="$(stages | awk -F'\t' -v s="$target" '$1 == s { print NR }')"
-    [[ -n "$n" ]] || { echo "unknown stage '$target' (see ./test.sh --list)" >&2; exit 1; }
-    if [[ "$n" == 1 ]]; then
-      from="$course_dir/compiled_starters/python/app"
-    else
-      previous="$(stages | awk -F'\t' -v n="$((n - 1))" 'NR == n { print $1 }')"
-      from="$course_dir/solutions/python/$(printf %02d $((n - 1)))-$previous/code/app"
-    fi
-    rm -rf "$here/app"
-    cp -r "$from" "$here/app"
-    chmod -R u+w "$here/app"
-    echo "$target" > "$stage_file"
-    echo "app/ is now the reference solution before $target; .stage is $target."
-    echo "When you pass it, compare with $course_dir/solutions/python/$(printf %02d "$n")-$target/diff/"
-    exit 0
-    ;;
   -*)
-    sed -n '2,10s/^# \{0,1\}//p' "$0" >&2
+    sed -n '2,8s/^# \{0,1\}//p' "$0" >&2
     exit 2
     ;;
   "")
