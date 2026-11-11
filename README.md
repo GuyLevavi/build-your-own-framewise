@@ -107,7 +107,9 @@ commit. The assignment covers the rest.
 ## Reviewing
 
 `REVIEWING.md` has the reviewer's fast track (`tools/fast_track.sh` starts any stage from the
-previous reference solution) and what to look for in each stage beyond passing.
+previous reference solution), the per-stage brief (`tools/brief.py`: the task, what the reference
+built, what to review and the Framewise assignment weeks behind the stage) and what to look for in
+each stage beyond passing.
 
 ## Repo layout
 
@@ -124,6 +126,7 @@ previous reference solution) and what to look for in each stage beyond passing.
 | `tools/verify_course.sh` | prove every stage: solution N passes 1..N, solution N-1 fails stage N |
 | `tools/compile.sh` | regenerate the compiled starter, the solutions' boilerplate and the diffs |
 | `tools/fast_track.sh` | the reviewer's fast track |
+| `tools/brief.py` | the reviewer's brief for a stage (reads `../framewise/ASSIGNMENTS.md` when present) |
 | `tools/make_release.sh` | the airgap tarballs |
 | `.gitlab-ci.yml` | this repo's own pipeline: shell checks, `compile.sh` is clean, `verify_course.sh` |
 

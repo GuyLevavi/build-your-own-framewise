@@ -6,20 +6,49 @@ yourself, and what to look for at each stage.
 
 ## The fast track
 
-You don't need to build all 25 stages to review them. For each stage:
+You don't need to build all 30 stages to review them. Work in a solution repo, the way a learner
+does: [codecrafters-framewise-python](https://github.com/GuyLevavi/codecrafters-framewise-python)
+pins this course and the tester as flake inputs, like codecrafters-shell-c, so the tester comes
+with your attempt and `./test.sh` runs it. Clone
+[framewise](https://github.com/GuyLevavi/framewise) next to it for the assignment material. Then, for
+each stage:
 
 ```sh
-tools/fast_track.sh wk3 ~/fw-review          # app/ becomes the reference solution of wk2
-less stage_descriptions/base-11-wk3.md        # the task
-tools/run_tests.sh ~/fw-review wk3            # fails: this is what the learner sees
-# implement it yourself, or at least sketch it; then:
-less solutions/python/11-wk3/diff/app/*.diff  # what the reference changed
-tools/run_tests.sh solutions/python/11-wk3/code wk3
+./review.sh wk3      # app/ becomes the reference solution of wk2, .stage becomes wk3, and the
+                     # brief for wk3 opens (below)
+./test.sh            # fails on wk3: this is what the learner sees
+# implement it yourself, or at least sketch it; then ./test.sh again, and compare:
+./review.sh --diff wk3
+```
+
+Without Nix (the airgapped pod, or the reviewer tarball), the same from this repo:
+
+```sh
+tools/fast_track.sh wk3 ~/fw-review           # as above, into ~/fw-review
+tools/run_tests.sh ~/fw-review wk3
+tools/brief.py wk3 --diff
 ```
 
 Doing it for real on the stages marked ★ below and reading the diff for the rest takes about two
 days, and covers everything a learner hits. `tools/verify_course.sh` proves the stage chain itself
 (each solution passes its stages, and the one before it fails).
+
+### The brief
+
+`tools/brief.py <slug>` (`./review.sh --brief <slug>` in the solution repo) is one page per stage, so
+you stay level with both the course and the assignment it stands for:
+
+- **The task:** the stage's opening and its "Why your design just broke".
+- **What the reference built:** the files the stage changed, with line counts, and a map of
+  every file the learner has written by then, each with its one-line purpose, marked new or changed.
+  `--diff` appends the diff.
+- **In review:** this stage's row of the table below.
+- **The assignment:** each Framewise week the stage covers, from `framewise/ASSIGNMENTS.md`: what the
+  week adds, its task, when it's done and its reading list; and the week's row of `TUTOR.md` (what
+  to check, common mistakes). `--full` prints the weeks whole. It finds framewise through
+  `FRAMEWISE_REPO`, or a clone next to this repo or next to where you run it.
+
+`tools/brief.py --list` lists every stage with its weeks and ★.
 
 ## Per stage
 
