@@ -48,7 +48,7 @@
          return self._info[name]
  
      def infer(self, name: str, images: np.ndarray) -> np.ndarray:
-@@ -94,15 +102,35 @@
+@@ -95,15 +103,38 @@
  def remote_frames(
      path: Path, profile: Profile, client: ModelClient, should_stop: Callable[[], bool]
  ) -> Iterator[FrameResult]:
@@ -81,9 +81,12 @@
 +            for chunk in batched(frames(capture, profile.every), info.max_batch):
 +                if should_stop():
 +                    raise Interrupted
-+                prepared = [model.prepare(profile.model, frame, info.size) for _, frame in chunk]
-+                images = np.stack([image for image, _ in prepared])
-+                fits = [(index, fit) for (index, _), (_, fit) in zip(chunk, prepared, strict=True)]
++                # One array for the batch, filled in place: a batch of 640 x 640 floats is 79 MB.
++                images = np.empty((len(chunk), 3, info.size, info.size), np.float32)
++                fits = []
++                for k, (index, frame) in enumerate(chunk):
++                    images[k], fit = model.prepare(profile.model, frame, info.size)
++                    fits.append((index, fit))
 +                pending.append((fits, pool.submit(client.infer, profile.model, images)))
 +                if len(pending) >= in_flight:
 +                    yield from collect()

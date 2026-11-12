@@ -5,7 +5,7 @@ More workers make more jobs finish per minute, but one long video is still analy
 ### Expected behaviour
 
 - `FRAMEWISE_DETECT_PROCESSES` (default 1) sets how many processes a worker runs the detector in.
-- With N processes (up to 4) a job runs at least 1 + 0.3 × (N − 1) times as many frames per second as with 1: 1.9× for 4.
+- With N processes (up to 4) a job runs at least 1 + 0.2 × (N − 1) times as many frames per second as with 1: 1.6× for 4.
 - The worker and its processes together stay under the one-process peak plus 350 MiB per process.
 - Results are exactly what one process produces, stored in order.
 

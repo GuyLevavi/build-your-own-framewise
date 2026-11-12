@@ -5,9 +5,9 @@ import (
 	"encoding/binary"
 	"image/jpeg"
 	"math"
-	"sort"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 )
 

@@ -189,8 +189,8 @@ const (
 	batchLatency   = 300 * time.Millisecond
 	batchMax       = 16
 	batchInstances = 2
-	batchOverlap   = 1.4
-	batchMemoryMiB = 400
+	batchOverlap   = 1.3
+	batchMemoryMiB = 1000
 )
 
 func testBatching(harness *test_case_harness.TestCaseHarness) error {

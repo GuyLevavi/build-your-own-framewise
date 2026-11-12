@@ -154,8 +154,9 @@ func testDownscale(harness *test_case_harness.TestCaseHarness) error {
 	return nil
 }
 
-// speedupTarget is what n processes must reach against one: 1.9x for 4 cores.
-func speedupTarget(n int) float64 { return 1 + 0.3*float64(n-1) }
+// speedupTarget is what n processes must reach against one: 1.6x for 4 cores (onnxruntime
+// already spreads one process over every core, so the gain is what runs around the model).
+func speedupTarget(n int) float64 { return 1 + 0.2*float64(n-1) }
 
 // detectProcesses is how many processes pf2 asks for: the CPUs this program
 // may use (a container's CPU quota counts), at most 4.

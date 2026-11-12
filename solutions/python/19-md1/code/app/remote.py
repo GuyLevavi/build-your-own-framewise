@@ -47,7 +47,7 @@ class ModelClient:
 
     def infer(self, name: str, images: np.ndarray) -> np.ndarray:
         """The model's output0 for a batch of prepared images (N x 3 x S x S float32)."""
-        raw = np.ascontiguousarray(images, dtype="<f4").tobytes()
+        raw = memoryview(np.ascontiguousarray(images, dtype="<f4")).cast("B")  # no copy
         header = json.dumps(
             {
                 "inputs": [
@@ -55,7 +55,7 @@ class ModelClient:
                         "name": "images",
                         "datatype": "FP32",
                         "shape": list(images.shape),
-                        "parameters": {"binary_data_size": len(raw)},
+                        "parameters": {"binary_data_size": raw.nbytes},
                     }
                 ],
                 "outputs": [{"name": "output0", "parameters": {"binary_data": True}}],
@@ -63,9 +63,10 @@ class ModelClient:
         ).encode()
         request = urllib.request.Request(
             f"{self.url}/v2/models/{name}/infer",
-            data=header + raw,
+            data=[header, raw],  # sent one after the other, not joined into a third copy
             headers={
                 "Content-Type": "application/octet-stream",
+                "Content-Length": str(len(header) + raw.nbytes),
                 "Inference-Header-Content-Length": str(len(header)),
             },
         )
