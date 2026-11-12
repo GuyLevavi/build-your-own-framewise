@@ -93,7 +93,7 @@ jobs:
       # UIDs in the user's subuid range, which on the runner stops at 165535.
       - name: let rootless podman map OpenShift's UIDs
         run: |
-          sudo usermod --add-subuids 200000-1001000000 --add-subgids 200000-1001000000 "$USER"
+          sudo usermod --add-subuids 300000-1001000000 --add-subgids 300000-1001000000 "$USER"
           podman system migrate
       - if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         run: tools/verify_course.sh 1 5
