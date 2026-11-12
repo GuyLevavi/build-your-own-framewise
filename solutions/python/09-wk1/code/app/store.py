@@ -103,7 +103,8 @@ class Store:
     def claim(self) -> Job | None:
         """Take the oldest PENDING job and mark it RUNNING, in one transaction.
 
-        FOR UPDATE locks the row so no other worker can take it too.
+        FOR UPDATE locks the row so no other worker can take it too; SKIP
+        LOCKED makes them pass over it instead of queueing behind the lock.
         """
         jobs = db.jobs.c
         with self.engine.begin() as conn:
@@ -112,7 +113,7 @@ class Store:
                 .where(jobs.status == Status.PENDING.value)
                 .order_by(jobs.created_at)
                 .limit(1)
-                .with_for_update()
+                .with_for_update(skip_locked=True)
             ).first()
             if row is None:
                 return None

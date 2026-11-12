@@ -1,0 +1,20 @@
+--- a/app/profiles.py
++++ b/app/profiles.py
+@@ -1,6 +1,7 @@
+ """Named analysis profiles, loaded from YAML and validated."""
+ 
+ from pathlib import Path
++from typing import Literal
+ 
+ import yaml
+ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+@@ -15,6 +16,9 @@
+     every: int = Field(default=1, ge=1)
+     max_gap_s: float = Field(default=0.5, ge=0)
+     labels: tuple[str, ...] = Field(default=("person", "car", "bicycle"), min_length=1)
++    # Where the detector runs: in this process, or on the model server at FRAMEWISE_MODEL_URL.
++    # A setting, not a subclass.
++    detector: Literal["local", "remote"] = "local"
+ 
+     @field_validator("labels")
+     @classmethod

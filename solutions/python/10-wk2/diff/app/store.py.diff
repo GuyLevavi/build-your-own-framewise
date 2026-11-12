@@ -1,21 +1,131 @@
 --- a/app/store.py
 +++ b/app/store.py
-@@ -103,7 +103,8 @@
-     def claim(self) -> Job | None:
-         """Take the oldest PENDING job and mark it RUNNING, in one transaction.
+@@ -2,6 +2,7 @@
  
--        FOR UPDATE locks the row so no other worker can take it too.
-+        FOR UPDATE locks the row so no other worker can take it too; SKIP
-+        LOCKED makes them pass over it instead of queueing behind the lock.
+ import uuid
+ from dataclasses import dataclass
++from datetime import timedelta
+ from enum import StrEnum
+ from typing import Any
+ 
+@@ -37,6 +38,7 @@
+     status: Status
+     error: str | None
+     labels: Labels | None
++    attempts: int = 0
+ 
+     def public(self) -> dict[str, Any]:
+         return {
+@@ -46,6 +48,7 @@
+             "status": self.status.value,
+             "error": self.error,
+             "labels": self.labels or {},
++            "attempts": self.attempts,
+         }
+ 
+ 
+@@ -54,7 +57,9 @@
+ 
+ 
+ def _job(row: sa.Row) -> Job:
+-    return Job(row.id, row.video_id, row.profile, Status(row.status), row.error, row.labels)
++    return Job(
++        row.id, row.video_id, row.profile, Status(row.status), row.error, row.labels, row.attempts
++    )
+ 
+ 
+ class Store:
+@@ -100,29 +105,68 @@
+ 
+     # Jobs, as workers see them
+ 
+-    def claim(self) -> Job | None:
+-        """Take the oldest PENDING job and mark it RUNNING, in one transaction.
++    def claim(self, lease_s: float, max_attempts: int) -> Job | None:
++        """Take the oldest job nobody holds: PENDING, or RUNNING with a lapsed lease.
+ 
+-        FOR UPDATE locks the row so no other worker can take it too; SKIP
+-        LOCKED makes them pass over it instead of queueing behind the lock.
++        SKIP LOCKED makes concurrent workers pass over a row another one is
++        claiming instead of queueing behind it. A job that has used up its
++        attempts is failed here, since its worker died each time.
          """
          jobs = db.jobs.c
++        while True:
++            with self.engine.begin() as conn:
++                row = conn.execute(
++                    sa.select(db.jobs)
++                    .where(
++                        sa.or_(
++                            jobs.status == Status.PENDING.value,
++                            sa.and_(
++                                jobs.status == Status.RUNNING.value,
++                                jobs.lease_until < sa.func.now(),
++                            ),
++                        )
++                    )
++                    .order_by(jobs.created_at)
++                    .limit(1)
++                    .with_for_update(skip_locked=True)
++                ).first()
++                if row is None:
++                    return None
++                if row.attempts >= max_attempts:
++                    conn.execute(
++                        sa.update(db.jobs)
++                        .where(jobs.id == row.id)
++                        .values(
++                            status=Status.FAILED.value,
++                            error=f"gave up after {row.attempts} attempts: the worker died each time",
++                            lease_until=None,
++                            updated_at=sa.func.now(),
++                        )
++                    )
++                    continue
++                conn.execute(
++                    sa.update(db.jobs)
++                    .where(jobs.id == row.id)
++                    .values(
++                        status=Status.RUNNING.value,
++                        attempts=jobs.attempts + 1,
++                        lease_until=sa.func.now() + timedelta(seconds=lease_s),
++                        updated_at=sa.func.now(),
++                    )
++                )
++                return Job(
++                    row.id, row.video_id, row.profile, Status.RUNNING, None, None, row.attempts + 1
++                )
++
++    def renew(self, job_id: str, lease_s: float) -> bool:
++        """Extend our lease. False means the job is no longer ours."""
          with self.engine.begin() as conn:
-@@ -112,7 +113,7 @@
-                 .where(jobs.status == Status.PENDING.value)
-                 .order_by(jobs.created_at)
-                 .limit(1)
--                .with_for_update()
-+                .with_for_update(skip_locked=True)
-             ).first()
-             if row is None:
-                 return None
+-            row = conn.execute(
+-                sa.select(db.jobs)
+-                .where(jobs.status == Status.PENDING.value)
+-                .order_by(jobs.created_at)
+-                .limit(1)
+-                .with_for_update(skip_locked=True)
+-            ).first()
+-            if row is None:
+-                return None
+-            conn.execute(
++            result = conn.execute(
+                 sa.update(db.jobs)
+-                .where(jobs.id == row.id)
+-                .values(status=Status.RUNNING.value, updated_at=sa.func.now())
++                .where(db.jobs.c.id == job_id, db.jobs.c.status == Status.RUNNING.value)
++                .values(lease_until=sa.func.now() + timedelta(seconds=lease_s))
+             )
+-            return Job(row.id, row.video_id, row.profile, Status.RUNNING, None, None)
++        return result.rowcount == 1
+ 
+     def finish(
+         self, job_id: str, status: Status, error: str | None = None, labels: Labels | None = None
+@@ -135,6 +179,7 @@
+                     status=status.value,
+                     error=error,
+                     labels=labels,
++                    lease_until=None,
+                     updated_at=sa.func.now(),
+                 )
+             )

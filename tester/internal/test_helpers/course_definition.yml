@@ -9,14 +9,15 @@ description_md: |-
   Framewise is a small video analytics service: it takes recorded video, runs a detector we hand
   you as a black box, and serves what appeared and when over HTTP. In this challenge you'll grow
   it from an empty `main.py` into a service with a Postgres job queue, several workers that
-  survive crashes, results you can query, and the speed and memory budgets of production.
+  survive crashes, results you can query, and a pipeline, an image and a Helm chart that ship it.
 
   Along the way you'll learn about streaming data, YAML config, FastAPI, Postgres and Alembic,
-  `SKIP LOCKED` queues, signals, SQL over results, profiling, multiprocessing, calling a model
-  server, and observability.
+  `SKIP LOCKED` queues, signals, SQL over results, calling a model server, structured logs,
+  GitLab CI, container images, Helm and GitOps. No computer vision background is needed: the
+  model is a black box with a written contract, and every stage has hints.
 
 short_description_md: |-
-  Learn about job queues, Postgres, workers, profiling and running a service
+  Learn about job queues, Postgres, workers, model servers and shipping a service
 
 completion_percentage: 30
 
@@ -46,13 +47,13 @@ stages:
   # Analyze
   - slug: "an1"
     name: "Analyze a clip"
-    difficulty: easy
+    difficulty: medium
     marketing_md: |-
       In this stage, you'll run the shipped .onnx detector on sampled frames and report when each label appears.
 
   - slug: "an2"
     name: "Analyze a long clip"
-    difficulty: medium
+    difficulty: easy
     marketing_md: |-
       In this stage, you'll analyze ten minutes of video under a memory budget.
 
@@ -60,7 +61,7 @@ stages:
     name: "Profiles in YAML"
     difficulty: medium
     marketing_md: |-
-      In this stage, you'll load named analysis profiles from YAML, let them pick the model, and reject bad ones precisely.
+      In this stage, you'll load named analysis profiles from YAML and reject bad ones precisely.
 
   # Serve
   - slug: "ap1"
@@ -81,30 +82,26 @@ stages:
     marketing_md: |-
       In this stage, you'll keep videos and jobs in Postgres, so a restart loses nothing.
 
+  # Work
   - slug: "wk1"
-    name: "Separate the worker"
-    difficulty: medium
-    marketing_md: |-
-      In this stage, you'll move job execution out of the API into its own `work` process.
-
-  - slug: "wk2"
-    name: "Many workers"
+    name: "Run workers"
     difficulty: hard
     marketing_md: |-
-      In this stage, you'll run several workers against one queue without two of them taking the same job.
+      In this stage, you'll move job execution into `work` processes that share one Postgres queue without two of them taking the same job.
 
-  - slug: "wk3"
+  - slug: "wk2"
     name: "Crashed workers"
     difficulty: hard
     marketing_md: |-
       In this stage, you'll give claims a lease so a job outlives the worker that died running it.
 
-  - slug: "wk4"
+  - slug: "wk3"
     name: "Stop gracefully"
     difficulty: medium
     marketing_md: |-
       In this stage, you'll make a worker stop cleanly on SIGTERM and hand its job back.
 
+  # Results
   - slug: "rs1"
     name: "Store detections"
     difficulty: medium
@@ -123,36 +120,18 @@ stages:
     marketing_md: |-
       In this stage, you'll make a retried or rerun job store its results exactly once, detections and episodes alike.
 
-  - slug: "pf1"
-    name: "Run the model smaller"
-    difficulty: medium
-    marketing_md: |-
-      In this stage, you'll make analysis faster with a profile that runs the detector at a smaller input size.
-
-  - slug: "pf2"
-    name: "Use every core"
-    difficulty: hard
-    marketing_md: |-
-      In this stage, you'll split one job across processes, and find out what the parent process costs you.
-
-  - slug: "pf3"
-    name: "When a process dies"
-    difficulty: medium
-    marketing_md: |-
-      In this stage, you'll keep a worker alive and honest when one of its pool processes crashes.
-
   # Call a model server
   - slug: "md1"
     name: "Call a model server"
     difficulty: medium
     marketing_md: |-
-      In this stage, you'll run the models on a model server that speaks Triton's HTTP protocol, chosen by a profile setting.
+      In this stage, you'll run the detector on a model server that speaks Triton's HTTP protocol, chosen by a profile setting.
 
   - slug: "md2"
-    name: "Batch and pipeline"
-    difficulty: hard
+    name: "Send batches"
+    difficulty: medium
     marketing_md: |-
-      In this stage, you'll batch frames and keep several requests in flight to hit a frame rate, without reading ahead past a memory budget.
+      In this stage, you'll send frames to the model server in batches, without reading the whole video ahead.
 
   - slug: "md3"
     name: "When the model server fails"
@@ -160,23 +139,12 @@ stages:
     marketing_md: |-
       In this stage, you'll set timeouts, retry what's worth retrying, and fail a job clearly when the model server can't help.
 
+  # Operate
   - slug: "op1"
-    name: "Metrics and logs"
+    name: "Logs and readiness"
     difficulty: medium
     marketing_md: |-
-      In this stage, you'll expose Prometheus metrics, report each job's frames per second, and write structured logs a log platform can search.
-
-  - slug: "op2"
-    name: "Live progress"
-    difficulty: hard
-    marketing_md: |-
-      In this stage, you'll stream a job's progress to clients with server-sent events and Postgres LISTEN/NOTIFY.
-
-  - slug: "op3"
-    name: "Survive a database outage"
-    difficulty: hard
-    marketing_md: |-
-      In this stage, you'll keep the API and the workers up while the database is gone, and recover when it's back.
+      In this stage, you'll write structured logs a log platform can search, report each job's frames per second, and tell Kubernetes when the API is ready.
 
   - slug: "hd1"
     name: "API keys"

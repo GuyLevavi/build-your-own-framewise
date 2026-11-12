@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from app.model import run
+from app.model import detect
 from app.profiles import Profile
 from app.video import frames, open_video
 
@@ -36,14 +36,14 @@ def presence(sightings: Iterable[tuple[float, set[str]]], profile: Profile) -> L
     }
 
 
-def detect_labels(frame: np.ndarray, profile: Profile) -> set[str]:
-    return {box.label for box in run(profile.model, frame)}
+def detect_labels(frame: np.ndarray) -> set[str]:
+    return {box.label for box in detect(frame)}
 
 
 def analyze(path: Path, profile: Profile) -> Labels:
     with open_video(path) as (capture, info):
         sightings = (
-            (index / info.fps, detect_labels(frame, profile))
+            (index / info.fps, detect_labels(frame))
             for index, frame in frames(capture, profile.every)
         )
         return presence(sightings, profile)

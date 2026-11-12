@@ -1,16 +1,14 @@
-"""Record what the course's models report on every frame of the tester's scenes.
+"""Record what the course's model reports on every frame of the tester's scenes.
 
 The tester draws its clips (internal/scenes.go) but can't know what a neural network finds in
-them, so this runs the models in the starter's models/ with onnxruntime on the clips exactly as a
+them, so this runs the detector in the starter's models/ with onnxruntime on the clips exactly as a
 learner's program reads them (OpenCV decoding the tester's AVI), preprocessed as models/README.md
 says, and writes internal/golden/<scene>.json.gz:
 
 - "detect": per frame, every person, car and bicycle yolo26n reports at 640 with a score of at
   least 0.1, as [label, score, x, y, w, h] in the video's pixels;
 - "detect_at": the same at the other sizes the tester runs the model at on this clip (the model
-  server's 512, the fast profile's 320);
-- "classify": per frame, yolo26n-cls's top class and its probability (only the parked clip is
-  ever classified, so only its frames are checked).
+  server's 512).
 
 The tester compares a learner's boxes with these as internal/compare.go does: each box the learner
 reports (score at least 0.5) must be one the reference found with at least ALLOWED, in nearly the
@@ -47,7 +45,7 @@ COUNTS = 0.5  # a detection counts from this score
 ALLOWED, REQUIRED = 0.3, 0.7  # see the header; internal/compare.go has the same numbers
 MIN_IOU = 0.85  # between the reference and the variants at the same size
 MAX_MISSING = 0.05  # of the clear boxes, a variant may miss this many (the tester allows 10%)
-SIZES = {"street": (640, 512), "hd_street": (640, 512, 320)}  # the sizes the tester runs at
+SIZES = {"street": (640, 512), "hd_street": (640, 512)}  # the sizes the tester runs at
 LABELS_ONLY = {"noisy_street"}  # the tester checks only which labels these show, not boxes
 
 
@@ -92,21 +90,6 @@ class Detector:
         return result
 
 
-class Classifier:
-    def __init__(self) -> None:
-        self.session = session("yolo26n-cls")
-        self.names = names("yolo26n-cls")
-
-    def __call__(self, frame, interpolation=cv2.INTER_LINEAR) -> list:
-        h, w = frame.shape[:2]
-        r = 224 / min(h, w)
-        resized = cv2.resize(frame, (round(w * r), round(h * r)), interpolation=interpolation)
-        h, w = resized.shape[:2]
-        top, left = (h - 224) // 2, (w - 224) // 2
-        x = resized[top : top + 224, left : left + 224, ::-1].transpose(2, 0, 1)[None].astype(np.float32) / 255
-        probs = self.session.run(None, {"images": x})[0][0]
-        return [self.names[int(probs.argmax())], round(float(probs.max()), 3)]
-
 
 def iou(a: list, b: list) -> float:
     ax, ay, aw, ah = a[2:]
@@ -150,7 +133,7 @@ def compare(rows: dict[int, list[list]], size: int, got: list[list], min_iou: fl
 
 
 def main(scenes_dir: str, only: set[str]) -> int:
-    detect, classify = Detector(), Classifier()
+    detect = Detector()
     problems: list[str] = []
     for path in sorted(Path(scenes_dir).glob("*.avi")):
         scene = path.stem
@@ -158,10 +141,10 @@ def main(scenes_dir: str, only: set[str]) -> int:
             continue
         sizes = SIZES.get(scene, (640,))
         detections = {size: [] for size in sizes}
-        classes = []
+        count = 0
         missing = {(size, what): [0, 0] for size in sizes for what in ("corner", "INTER_AREA")}
         for i, frame in enumerate(frames(path)):
-            classes.append(classify(frame))
+            count += 1
             rows = {size: detect(frame, size) for size in sizes}
             for size in sizes:
                 detections[size].append(rows[size])
@@ -179,23 +162,15 @@ def main(scenes_dir: str, only: set[str]) -> int:
                     missing[size, what][1] += of
                     if size == 640 and labels_at(rows[size]) != labels_at(variant):
                         problems.append(f"{scene} frame {i}: {what} finds {sorted(labels_at(variant))}, the reference {sorted(labels_at(rows[size]))}")
-            if scene == "parked" and float(frame.std()) >= 1:
-                top, other = classes[-1], classify(frame, cv2.INTER_AREA)
-                for c in (top, other):
-                    if ALLOWED <= c[1] < REQUIRED:
-                        problems.append(f"{scene} frame {i}: the classifier's top class {c[0]} at {c[1]:.2f}")
-                if (top[1] >= COUNTS) != (other[1] >= COUNTS) or (top[1] >= COUNTS and top[0] != other[0]):
-                    problems.append(f"{scene} frame {i}: the reference classifies {top}, INTER_AREA {other}")
         for (size, what), (n, of) in missing.items():
             print(f"{scene} at {size}, {what}: {n} of {of} clear boxes missing", file=sys.stderr)
             if n > MAX_MISSING * of:
                 problems.append(f"{scene} at {size}, {what}: {n} of {of} clear boxes missing, over {MAX_MISSING:.0%}")
         data = {
             "scene": scene,
-            "frames": len(classes),
+            "frames": count,
             "detect": detections[640],
             "detect_at": {str(size): rows for size, rows in detections.items() if size != 640},
-            "classify": classes,
         }
         OUT.mkdir(parents=True, exist_ok=True)
         with gzip.GzipFile(OUT / f"{scene}.json.gz", "wb", mtime=0) as f:

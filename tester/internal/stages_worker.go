@@ -17,6 +17,16 @@ func workerStage(harness *test_case_harness.TestCaseHarness, extra map[string]st
 	return dbURL, serviceEnv(harness, dbURL, extra), nil
 }
 
+// testWorkers is wk1: the API only records jobs, `work` processes run them, and
+// several workers share the queue without taking the same job.
+func testWorkers(harness *test_case_harness.TestCaseHarness) error {
+	if err := testSeparateWorker(harness); err != nil {
+		return err
+	}
+	harness.Logger.Infof("Now several workers on one queue")
+	return testManyWorkers(harness)
+}
+
 func testSeparateWorker(harness *test_case_harness.TestCaseHarness) error {
 	_, env, err := workerStage(harness, nil)
 	if err != nil {

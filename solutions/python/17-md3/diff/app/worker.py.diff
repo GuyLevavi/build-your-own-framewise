@@ -1,0 +1,27 @@
+--- a/app/worker.py
++++ b/app/worker.py
+@@ -29,6 +29,7 @@
+     poll_s: float = 0.5
+     batch_frames: int = 50
+     model_url: str | None = None
++    model_timeout_s: float = 10.0
+ 
+     @classmethod
+     def from_env(cls) -> "WorkerSettings":
+@@ -36,6 +37,7 @@
+             lease_s=float(os.environ.get("FRAMEWISE_LEASE_S", "30")),
+             max_attempts=int(os.environ.get("FRAMEWISE_MAX_ATTEMPTS", "3")),
+             model_url=os.environ.get("FRAMEWISE_MODEL_URL") or None,
++            model_timeout_s=float(os.environ.get("FRAMEWISE_MODEL_TIMEOUT_S", "10")),
+         )
+ 
+ 
+@@ -83,7 +85,7 @@
+                 raise ModelError(
+                     "the profile's detector is remote, and FRAMEWISE_MODEL_URL isn't set"
+                 )
+-            self._model = ModelClient(self.settings.model_url)
++            self._model = ModelClient(self.settings.model_url, self.settings.model_timeout_s)
+         return self._model
+ 
+     def run_forever(self) -> None:

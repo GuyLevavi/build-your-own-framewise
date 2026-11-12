@@ -53,7 +53,7 @@ make copy_course_file   # refresh internal/test_helpers/course_definition.yml fr
   SIGTERM and starts it again on the same `--data-dir`.
 - **Model server** (`modelserver.go`, `modelbackend.go`, `stages_model.go`): from md1 the tester
   runs a stand-in for Triton on a free port and passes `FRAMEWISE_MODEL_URL`. It speaks the KServe
-  v2 HTTP protocol (JSON or binary tensors), serves `yolo26n` and `yolo26n-cls` with Triton's
+  v2 HTTP protocol (JSON or binary tensors), serves `yolo26n` with Triton's
   metadata and config (input size, `max_batch_size`, `instance_group`), and runs the learner's own
   `models/*.onnx` in Python backend processes (`internal/hook/model_backend.py`, onnxruntime).
   md2 adds a fixed latency per request and sets its target from the model's measured speed on the

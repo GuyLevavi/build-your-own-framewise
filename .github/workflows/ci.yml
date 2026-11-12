@@ -58,7 +58,7 @@ jobs:
           if ./test.sh pb1; then echo "the starter passes stage 1"; exit 1; fi
 
   # Solution N passes 1..N and solution N-1 fails N: the first five stages on every change, all
-  # thirty weekly (the database stages start Postgres with podman, which the runner has).
+  # twenty-four weekly (the database stages start Postgres with podman, which the runner has).
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 240

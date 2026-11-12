@@ -1,15 +1,15 @@
 --- a/app/profiles.py
 +++ b/app/profiles.py
-@@ -1,10 +1,13 @@
+@@ -1,10 +1,12 @@
 -"""How to analyze a video: which frames, which labels, how long a gap may be."""
 +"""Named analysis profiles, loaded from YAML and validated."""
  
+-from typing import Literal
 +from pathlib import Path
- from typing import Literal
  
 -from pydantic import BaseModel, ConfigDict, Field
 +import yaml
-+from pydantic import BaseModel, ConfigDict, Field, ValidationError, ValidationInfo, field_validator
++from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
  
 -Label = Literal["person", "car", "bicycle"]
 +from app import model as models
@@ -17,24 +17,19 @@
  
  
  class Profile(BaseModel):
-@@ -12,4 +15,50 @@
+@@ -12,4 +14,45 @@
  
      every: int = Field(default=1, ge=1)
      max_gap_s: float = Field(default=0.5, ge=0)
 -    labels: tuple[Label, ...] = Field(default=("person", "car", "bicycle"), min_length=1)
-+    # Before labels: which labels exist depends on the model.
-+    model: Literal["yolo26n", "yolo26n-cls"] = models.DETECT
 +    labels: tuple[str, ...] = Field(default=("person", "car", "bicycle"), min_length=1)
 +
 +    @field_validator("labels")
 +    @classmethod
-+    def _model_has_them(cls, labels: tuple[str, ...], info: ValidationInfo) -> tuple[str, ...]:
-+        name = info.data.get("model")
-+        if name is None:  # the model itself was invalid, and said so
-+            return labels
++    def _detector_has_them(cls, labels: tuple[str, ...]) -> tuple[str, ...]:
 +        for label in labels:
-+            if label not in models.labels(name):
-+                raise ValueError(f"{name} has no label {label!r} (models/{name}.labels.txt)")
++            if label not in models.labels():
++                raise ValueError(f"the detector has no label {label!r} (models/yolo26n.labels.txt)")
 +        return labels
 +
 +

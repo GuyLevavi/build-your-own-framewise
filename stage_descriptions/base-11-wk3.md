@@ -1,24 +1,53 @@
-In this stage, you'll give claims a lease so a job outlives the worker that died running it.
+In this stage, you'll make a worker stop cleanly on SIGTERM and hand its job back.
 
-Workers die: the node is drained, the container hits its memory limit, or the model runtime itself crashes, as native code does on an input it can't handle. (The tester makes onnxruntime abort the process when it's handed a mid-grey frame, the way a camera's dropped feed looks.) A job whose worker died is `RUNNING` forever, and nobody will ever take it.
+Every deploy and every scale-down stops your workers with SIGTERM, then SIGKILL a little later. A lease means the job isn't lost, but with a lease long enough for real work it sits idle until the lease runs out, and the attempt counts against it.
+
+### New here?
+
+- **SIGTERM**: the polite "please stop" signal. Kubernetes sends it before every deploy or scale-down, then SIGKILL if the process is still there after a grace period.
+- **Signal handler**: a function Python runs when a signal arrives, between two bytecode instructions of whatever was running.
 
 ### Expected behaviour
 
-- A claim holds the job for a lease of `FRAMEWISE_LEASE_S` seconds (default your choice). A worker renews the lease while it works, from a thread, since the analysis loop is busy.
-- A `RUNNING` job whose lease ran out is claimable again, like a `PENDING` one.
-- Each claim counts an attempt. `GET /jobs/{id}` has `"attempts"`: how many times a worker has taken the job.
-- A job that has used `FRAMEWISE_MAX_ATTEMPTS` attempts (default your choice) and lost its worker again is `FAILED`, with an `"error"` that says so. It must not be retried forever.
+- On SIGTERM, `work` stops between frames, returns its job to `PENDING` (or finishes it, if it was about to), and exits with code 0 within a few seconds.
+- A job given back this way is not a failed attempt.
+- An idle worker exits promptly on SIGTERM too.
 
 ### Tests
 
-The tester runs with `FRAMEWISE_LEASE_S=3` and `FRAMEWISE_MAX_ATTEMPTS=2`, starts 2 workers and restarts any worker that exits, as Kubernetes would. It submits the long clip with the `traffic` profile, waits for the detector to run, and kills that worker with SIGKILL. The job must reach `DONE` with the right labels and `"attempts": 2`. It then submits `poison.avi`, a clip with a frame that crashes the detector: the job must end `FAILED` with `"attempts": 2` and a non-empty `"error"`. A last job on the street clip must still succeed.
+The tester runs one worker with `FRAMEWISE_LEASE_S=60`, submits the long clip, waits for the detector to start, and sends SIGTERM. The worker must exit within 5 seconds with code 0, and the job must be `PENDING` or `DONE`, not `RUNNING`. A new worker must then take it to `DONE`.
 
 ### Why your design just broke
 
-"Claimed" was a status; now it is a status plus a deadline that someone has to keep moving. That puts a second thread in the worker (the heartbeat) and a second condition in the claim query (`RUNNING` with an expired lease). A worker that finds its lease gone (because it was too slow to renew and someone else took the job) should stop working on it. Think about what "attempt" means: the poison job never fails with an exception you can catch, so the only place that can give up on it is the claim.
+Python's default for SIGTERM is to die on the spot. Handling it means a stop flag that the main loop and the analysis loop both check, so the analysis needs a way to be asked to stop between frames, and the repository needs a "give this back" operation that only applies if the job is still yours. The signal handler should only set the flag.
 
 ### Pointers
 
-- Martin Kleppmann, *Designing Data-Intensive Applications*, chapter 8, "Process pauses" and "Leases".
-- [Python `threading.Event`](https://docs.python.org/3/library/threading.html#event-objects) for a heartbeat you can stop.
-- Search: `visibility timeout`, `job queue lease heartbeat`, `poison message`.
+- [Python `signal`](https://docs.python.org/3/library/signal.html), especially "Execution of Python signal handlers".
+- [Kubernetes: termination of pods](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination).
+- Search: `graceful shutdown worker sigterm python`, `terminationGracePeriodSeconds`.
+
+### Hints
+
+Try the stage first. Open a hint when you're stuck, one at a time.
+
+<details>
+<summary>Hint 1: the idea</summary>
+
+The handler only sets a flag. The worker's loop checks the flag before claiming; the analysis checks it between frames and stops early when it's set. A job stopped this way goes back to `PENDING`, and its attempt is given back.
+
+</details>
+
+<details>
+<summary>Hint 2: the shape of a solution</summary>
+
+`stop = threading.Event()`; `signal.signal(signal.SIGTERM, lambda *_: stop.set())`. Pass a `should_stop` callable into the frame loop and `raise Interrupted` when it's true. On `Interrupted`, the repository's `release(job_id)` runs `UPDATE ... SET status = 'PENDING', lease_until = NULL, attempts = attempts - 1 WHERE id = :id AND status = 'RUNNING'`. Then exit 0.
+
+</details>
+
+<details>
+<summary>Hint 3: the usual traps</summary>
+
+An idle worker sleeping with `time.sleep(poll)` won't notice the flag until it wakes: sleep with `stop.wait(poll)` instead. Don't do database work inside the signal handler itself.
+
+</details>

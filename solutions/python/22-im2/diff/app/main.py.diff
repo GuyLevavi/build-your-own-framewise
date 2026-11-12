@@ -1,0 +1,21 @@
+--- a/app/main.py
++++ b/app/main.py
+@@ -37,7 +37,7 @@
+     app = create_app(
+         Settings.from_env(args.data_dir), Store(make_engine()), service_profiles(), service_events()
+     )
+-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
++    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+ 
+ 
+ def cmd_work(args: argparse.Namespace) -> None:
+@@ -89,6 +89,9 @@
+     a.set_defaults(run=cmd_analyze)
+ 
+     s = sub.add_parser("serve", help="run the HTTP API")
++    # 127.0.0.1 on a workstation; in a pod or a container with its own network, 0.0.0.0, or
++    # traffic from outside (a published port, a Service) never reaches the server.
++    s.add_argument("--host", default="127.0.0.1")
+     s.add_argument("--port", type=int, default=8000)
+     s.add_argument("--data-dir", type=Path, default=Path("data"))
+     s.set_defaults(run=cmd_serve)
