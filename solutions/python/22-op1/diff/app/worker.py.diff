@@ -19,7 +19,7 @@
  
  
  class Worker:
-@@ -127,18 +130,21 @@
+@@ -132,18 +135,21 @@
              self.run(job)
  
      def run(self, job: Job) -> None:
@@ -43,9 +43,9 @@
                  else:
                      self.store.release(job.id)
                  return
-@@ -151,17 +157,30 @@
+@@ -156,17 +162,30 @@
                      return
-                 # A pool process died (fwdetect aborts on some frames): like a
+                 # A pool process died (the model aborts on some frames): like a
                  # worker dying, it costs the job an attempt.
 -                log.warning("a detector process died on job %s; retrying it", job.id)
 +                log.warning("a detector process died; retrying the job", extra=context)
@@ -78,7 +78,7 @@
          profile = self.profiles[job.profile]
          sightings: list[tuple[float, set[str]]] = []
          batch: list[Detection] = []
-@@ -176,7 +195,7 @@
+@@ -181,7 +200,7 @@
                  self.store.add_detections(job.id, batch)
                  batch = []
          self.store.add_detections(job.id, batch)

@@ -12,23 +12,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// expectedBoxes lists every box the default profile stores for s in frames [from, to].
-func expectedBoxes(s scene, from, to int) []box {
-	return expectedBoxesEvery(s, from, to, 1)
-}
-
-// expectedBoxesEvery lists the boxes a profile sampling every `every` frames
-// (and keeping every label) stores for s in frames [from, to].
-func expectedBoxesEvery(s scene, from, to, every int) []box {
-	var result []box
-	for i := from; i <= to && i < s.frames; i++ {
-		if i%every == 0 {
-			result = append(result, s.boxesAt(i)...)
-		}
-	}
-	return result
-}
-
 type storedBox struct {
 	t float64
 	box
@@ -66,36 +49,9 @@ func detectionsField(object map[string]any) ([]storedBox, error) {
 	return result, nil
 }
 
-// sameBox: same label, and boxes that overlap by at least minIoU (intersection over union).
-// The model's boxes move a few pixels with how you resize a frame for it, so
-// exact positions can't be expected.
-func sameBox(a, b box, minIoU float64) bool {
-	return a.Label == b.Label && a.iou(b) >= minIoU
-}
-
-// compareDetections checks got against frames [from, to] of s, in order of time then label.
+// compareDetections checks got against frames [from, to] of s, at the default input size.
 func compareDetections(got []storedBox, s scene, from, to int) error {
-	return compareDetectionsWithin(got, s, from, to, 0.85)
-}
-
-func compareDetectionsWithin(got []storedBox, s scene, from, to int, minIoU float64) error {
-	var want []storedBox
-	for i := from; i <= to && i < s.frames; i++ {
-		boxes := s.boxesAt(i)
-		sort.Slice(boxes, func(a, b int) bool { return boxes[a].Label < boxes[b].Label })
-		for _, b := range boxes {
-			want = append(want, storedBox{float64(i) / float64(s.fps), b})
-		}
-	}
-	if len(got) != len(want) {
-		return fmt.Errorf("expected %d detections, got %d", len(want), len(got))
-	}
-	for i := range want {
-		if math.Abs(got[i].t-want[i].t) > 1e-3 || !sameBox(got[i].box, want[i].box, minIoU) {
-			return fmt.Errorf("expected detection %d (sorted by t_s, then label) to be %s, got %s (IoU at least %.2f)", i, want[i], got[i], minIoU)
-		}
-	}
-	return nil
+	return compareDetectionsAt(got, s, 640, from, to, 0.85)
 }
 
 func detectionCount(dbURL, jobID string) (int64, error) {
@@ -169,8 +125,8 @@ func testStoreDetections(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	if want := len(expectedBoxes(sceneStreet, 0, sceneStreet.frames-1)); n != int64(want) {
-		return fmt.Errorf("expected one row in results.detections per box per analyzed frame (%d), found %d", want, n)
+	if err := expectRowCount(n, sceneStreet, 640, 1, "the job"); err != nil {
+		return err
 	}
 	harness.Logger.Successf("✓ %d rows in results.detections", n)
 	path := fmt.Sprintf("/jobs/%s/detections?from_s=2&to_s=4", jobID)
@@ -409,10 +365,10 @@ func testRetries(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	if want := len(expectedBoxesEvery(sceneLong, 0, sceneLong.frames-1, sparseProfile.every)); n != int64(want) {
-		return fmt.Errorf("expected exactly %d rows in results.detections for the job after its retry, found %d. The first attempt's rows must not be counted twice", want, n)
+	if err := expectRowCount(n, sceneLong, 640, sparseProfile.every, "the job after its retry"); err != nil {
+		return fmt.Errorf("%v. The first attempt's rows must not be counted twice", err)
 	}
-	harness.Logger.Successf("✓ exactly %d rows after the retry", n)
+	harness.Logger.Successf("✓ %d rows after the retry", n)
 	if err := sv.expectEvents(jobID, sceneLong, nil); err != nil {
 		return err
 	}

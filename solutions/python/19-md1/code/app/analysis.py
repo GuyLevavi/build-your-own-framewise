@@ -1,15 +1,13 @@
-"""Running the detector over a video, and turning sightings into segments."""
+"""Running the model over a video, and turning sightings into segments."""
 
-import dataclasses
 import signal
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-import cv2
-import fwdetect
 import numpy as np
 
+from app.model import Box, run, use_threads
 from app.profiles import Profile
 from app.video import frames, open_video
 
@@ -21,31 +19,12 @@ Labels = dict[str, list[Segment]]
 class FrameResult:
     index: int
     t_s: float
-    boxes: list[fwdetect.Box]
+    boxes: list[Box]
 
 
-# fwdetect's cost grows with the pixels it gets and its accuracy doesn't, down to
-# its MIN_WIDTH: run it at this width and scale the boxes back.
-DETECT_WIDTH = 640
-
-
-def detect(frame: np.ndarray) -> list[fwdetect.Box]:
-    """fwdetect.detect, at no more than DETECT_WIDTH, in the frame's own coordinates."""
-    height, width = frame.shape[:2]
-    if width <= DETECT_WIDTH:
-        return fwdetect.detect(frame)
-    scale = width / DETECT_WIDTH
-    small = cv2.resize(frame, (DETECT_WIDTH, round(height / scale)), interpolation=cv2.INTER_AREA)
-    return [
-        dataclasses.replace(
-            box,
-            x=round(box.x * scale),
-            y=round(box.y * scale),
-            w=round(box.w * scale),
-            h=round(box.h * scale),
-        )
-        for box in fwdetect.detect(small)
-    ]
+def detect(frame: np.ndarray, profile: Profile) -> list[Box]:
+    """The profile's model on one frame, at the profile's input size, in the frame's pixels."""
+    return run(profile.model, frame, profile.input_size)
 
 
 class Interrupted(Exception):
@@ -59,12 +38,12 @@ def detect_frames(
     start: int = 0,
     stop: int | None = None,
 ) -> Iterator[FrameResult]:
-    """Run the detector on every sampled frame in [start, stop), one frame at a time."""
+    """Run the model on every sampled frame in [start, stop), one frame at a time."""
     with open_video(path) as (capture, info):
         for index, frame in frames(capture, profile.every, start, stop):
             if should_stop():
                 raise Interrupted
-            yield FrameResult(index, index / info.fps, detect(frame))
+            yield FrameResult(index, index / info.fps, detect(frame, profile))
 
 
 # Splitting a video across processes: each process opens the file itself and
@@ -94,12 +73,15 @@ def detect_chunk(chunk: Chunk) -> list[FrameResult]:
     return list(detect_frames(chunk.path, chunk.profile, start=chunk.start, stop=chunk.stop))
 
 
-def ignore_interrupts() -> None:
-    """Ctrl-C reaches the whole process group: leave it to the parent, which stops the pool.
+def start_process(threads: int) -> None:
+    """Runs first in every pool process.
 
-    SIGTERM keeps its default: pools stop their processes with it.
+    Ctrl-C reaches the whole process group: leave it to the parent, which stops the pool.
+    SIGTERM keeps its default: pools stop their processes with it. And the model gets its
+    share of the cores: each process using all of them only slows the others down.
     """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+    use_threads(threads)
 
 
 @dataclass

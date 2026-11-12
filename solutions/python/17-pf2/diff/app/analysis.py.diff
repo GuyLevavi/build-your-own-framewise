@@ -1,14 +1,21 @@
 --- a/app/analysis.py
 +++ b/app/analysis.py
-@@ -1,6 +1,7 @@
- """Running the detector over a video, and turning sightings into segments."""
+@@ -1,12 +1,13 @@
+ """Running the model over a video, and turning sightings into segments."""
  
- import dataclasses
 +import signal
  from collections.abc import Callable, Iterable, Iterator
  from dataclasses import dataclass
  from pathlib import Path
-@@ -52,16 +53,55 @@
+ 
+ import numpy as np
+ 
+-from app.model import Box, run
++from app.model import Box, run, use_threads
+ from app.profiles import Profile
+ from app.video import frames, open_video
+ 
+@@ -31,16 +32,58 @@
  
  
  def detect_frames(
@@ -19,14 +26,14 @@
 +    start: int = 0,
 +    stop: int | None = None,
  ) -> Iterator[FrameResult]:
--    """Run the detector on every sampled frame, one frame at a time."""
-+    """Run the detector on every sampled frame in [start, stop), one frame at a time."""
+-    """Run the model on every sampled frame, one frame at a time."""
++    """Run the model on every sampled frame in [start, stop), one frame at a time."""
      with open_video(path) as (capture, info):
 -        for index, frame in frames(capture, profile.every):
 +        for index, frame in frames(capture, profile.every, start, stop):
              if should_stop():
                  raise Interrupted
-             yield FrameResult(index, index / info.fps, detect(frame))
+             yield FrameResult(index, index / info.fps, detect(frame, profile))
  
  
 +# Splitting a video across processes: each process opens the file itself and
@@ -56,12 +63,15 @@
 +    return list(detect_frames(chunk.path, chunk.profile, start=chunk.start, stop=chunk.stop))
 +
 +
-+def ignore_interrupts() -> None:
-+    """Ctrl-C reaches the whole process group: leave it to the parent, which stops the pool.
++def start_process(threads: int) -> None:
++    """Runs first in every pool process.
 +
-+    SIGTERM keeps its default: pools stop their processes with it.
++    Ctrl-C reaches the whole process group: leave it to the parent, which stops the pool.
++    SIGTERM keeps its default: pools stop their processes with it. And the model gets its
++    share of the cores: each process using all of them only slows the others down.
 +    """
 +    signal.signal(signal.SIGINT, signal.SIG_IGN)
++    use_threads(threads)
 +
 +
  @dataclass

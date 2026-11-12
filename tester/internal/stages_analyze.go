@@ -108,10 +108,10 @@ func testAnalyze(harness *test_case_harness.TestCaseHarness) error {
 	return analyzeScene(harness, sceneNoisyStreet, profile{every: 2, maxGapS: 0.3, labels: allLabels}, 0, "--every", "2", "--max-gap", "0.3")
 }
 
-// an2's budget: well above Python, PyTorch, Ultralytics and the model with one
-// frame at a time, well below that plus the ~520 MB the long clip's decoded
+// an2's budget: well above Python, onnxruntime and the model with one frame at
+// a time (about 170 MB), well below that plus the ~1 GB the long clip's decoded
 // frames take.
-const analyzeLongMaxRSS = 1100 << 20
+const analyzeLongMaxRSS = 400 << 20
 
 func testAnalyzeLong(harness *test_case_harness.TestCaseHarness) error {
 	return analyzeScene(harness, sceneLong, profile{every: 10, maxGapS: 2, labels: allLabels}, analyzeLongMaxRSS, "--every", "10", "--max-gap", "2")

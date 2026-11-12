@@ -533,14 +533,14 @@ func isGreyImage(raw []byte, i, size int) bool {
 }
 
 // calibrate runs one frame on an idle backend and returns how long the model took.
-func (m *modelServer) calibrate() (time.Duration, error) {
-	data := make([]byte, 3*m.size*m.size*4)
+func (m *modelServer) calibrate(n int) (time.Duration, error) {
+	data := make([]byte, n*3*m.size*m.size*4)
 	backend := <-m.backends
 	defer func() { m.backends <- backend }()
 	var best time.Duration
 	for i := range 4 {
 		start := time.Now()
-		if _, _, err := backend.run(detectModel, []int{1, 3, m.size, m.size}, data); err != nil {
+		if _, _, err := backend.run(detectModel, []int{n, 3, m.size, m.size}, data); err != nil {
 			return 0, fmt.Errorf("CodeCrafters Internal Error: calibrating the model server: %v", err)
 		}
 		if d := time.Since(start); i > 0 && (best == 0 || d < best) {

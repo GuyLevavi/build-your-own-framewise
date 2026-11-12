@@ -5,7 +5,7 @@
 #
 #   framewise-course-<rev>.tar.gz    for the learner: stages, starter, tools, tester. No solutions.
 #   framewise-reviewer-<rev>.tar.gz  for the reviewer: the same, plus reference solutions and their
-#                                    diffs, fwdetect's source, verify_course.sh, fast_track.sh,
+#                                    diffs, verify_course.sh, fast_track.sh,
 #                                    brief.py and REVIEWING.md.
 #
 # Each unpacks to build-your-own-framewise/, with the tester in its tester/ as tools/run_tests.sh
@@ -67,7 +67,7 @@ learner=(
   README.md LICENSE course-definition.yml stage_descriptions compiled_starters dockerfiles tester
   tools/run_tests.sh tools/registries.conf tools/images.env
 )
-reviewer=("${learner[@]}" REVIEWING.md solutions packages starter_templates
+reviewer=("${learner[@]}" REVIEWING.md solutions starter_templates
   tools/verify_course.sh tools/fast_track.sh tools/brief.py tools/compile.sh)
 
 pack() {

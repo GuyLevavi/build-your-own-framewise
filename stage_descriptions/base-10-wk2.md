@@ -9,7 +9,7 @@ One worker analyzes one job at a time. To go faster you start more, and now they
 
 ### Tests
 
-The tester sets `FWDETECT_TRACE` so every detector call is logged with its process id. It submits 12 jobs on the street clip, then locks the first job's row in its own transaction, as a worker in the middle of claiming it would. It starts 3 workers and expects the other 11 jobs to finish while the lock is held. It then releases the lock, waits for all 12 jobs to be `DONE`, and checks that the trace has exactly 12 × 120 calls (no job analyzed twice) and that at least 2 different workers made them.
+The tester watches onnxruntime inside your workers and logs every frame the detector runs on, with its process id. It submits 12 jobs on the street clip, then locks the first job's row in its own transaction, as a worker in the middle of claiming it would. It starts 3 workers and expects the other 11 jobs to finish while the lock is held. It then releases the lock, waits for all 12 jobs to be `DONE`, and checks that the log has exactly 12 × 120 frames (no job analyzed twice) and that at least 2 different workers made them.
 
 ### Why your design just broke
 
@@ -18,4 +18,4 @@ With `FOR UPDATE`, every worker that reads the same "oldest pending job" waits o
 ### Pointers
 
 - [`SKIP LOCKED` in the `SELECT` docs](https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE), and the 2ndQuadrant post "What is SKIP LOCKED for in PostgreSQL 9.5?".
-- Search: `postgres queue skip locked`, `read committed lost update`, `fwdetect trace` in this course's README.
+- Search: `postgres queue skip locked`, `read committed lost update`.

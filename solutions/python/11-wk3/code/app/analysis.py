@@ -1,11 +1,10 @@
-"""Running the detector over a video, and turning sightings into segments."""
+"""Running the model over a video, and turning sightings into segments."""
 
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-import fwdetect
-
+from app.model import Box, run
 from app.profiles import Profile
 from app.video import frames, open_video
 
@@ -17,7 +16,7 @@ Labels = dict[str, list[Segment]]
 class FrameResult:
     index: int
     t_s: float
-    boxes: list[fwdetect.Box]
+    boxes: list[Box]
 
 
 class Interrupted(Exception):
@@ -27,12 +26,12 @@ class Interrupted(Exception):
 def detect_frames(
     path: Path, profile: Profile, should_stop: Callable[[], bool] = lambda: False
 ) -> Iterator[FrameResult]:
-    """Run the detector on every sampled frame, one frame at a time."""
+    """Run the model on every sampled frame, one frame at a time."""
     with open_video(path) as (capture, info):
         for index, frame in frames(capture, profile.every):
             if should_stop():
                 raise Interrupted
-            yield FrameResult(index, index / info.fps, fwdetect.detect(frame))
+            yield FrameResult(index, index / info.fps, run(profile.model, frame))
 
 
 @dataclass

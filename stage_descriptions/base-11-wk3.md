@@ -1,6 +1,6 @@
 In this stage, you'll give claims a lease so a job outlives the worker that died running it.
 
-Workers die: the node is drained, the container hits its memory limit, or the detector itself crashes (`fwdetect` aborts the process on a mid-grey frame, by design). A job whose worker died is `RUNNING` forever, and nobody will ever take it.
+Workers die: the node is drained, the container hits its memory limit, or the model runtime itself crashes, as native code does on an input it can't handle. (The tester makes onnxruntime abort the process when it's handed a mid-grey frame, the way a camera's dropped feed looks.) A job whose worker died is `RUNNING` forever, and nobody will ever take it.
 
 ### Expected behaviour
 

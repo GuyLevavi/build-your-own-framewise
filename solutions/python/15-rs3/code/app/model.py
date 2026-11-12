@@ -1,13 +1,21 @@
-"""The detector: models/yolo26n.pt, run with Ultralytics (models/README.md is its contract)."""
+"""The models in models/, run with onnxruntime (models/README.md is their contract).
+
+yolo26n finds objects and their boxes; yolo26n-cls names what a whole frame shows. Both answer
+here as boxes in the frame's pixels: a classification is one box, the whole frame.
+"""
 
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
+import cv2
 import numpy as np
 
 MODELS = Path(__file__).resolve().parent.parent / "models"
-MIN_SCORE = 0.5  # a detection counts from this score
+DETECT, CLASSIFY = "yolo26n", "yolo26n-cls"
+SIZE = 640  # the detector's input is SIZE x SIZE
+CLASSIFY_SIZE = 224  # the classifier's
+MIN_SCORE = 0.5  # a detection, or a top class, counts from this score
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,18 +29,64 @@ class Box:
 
 
 @cache
-def _detector():
-    from ultralytics import YOLO  # PyTorch takes a while to import: only when a frame needs it
+def _session(model: str):
+    import onnxruntime  # only when a frame needs it
 
-    return YOLO(str(MODELS / "yolo26n.pt"), task="detect")
+    path = MODELS / f"{model}.onnx"
+    return onnxruntime.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+
+
+@cache
+def labels(model: str) -> tuple[str, ...]:
+    """The model's labels, by class id."""
+    return tuple((MODELS / f"{model}.labels.txt").read_text().splitlines())
+
+
+def _tensor(image: np.ndarray) -> np.ndarray:
+    """A BGR HWC image as the models take it: RGB CHW floats in 0..1, a batch of one."""
+    return image[:, :, ::-1].transpose(2, 0, 1)[None].astype(np.float32) / 255
 
 
 def detect(frame: np.ndarray) -> list[Box]:
     """What the detector finds in one BGR frame (as OpenCV reads it), in the frame's pixels."""
-    result = _detector()(frame, conf=MIN_SCORE, verbose=False)[0]
+    # Letterbox: scale to fit SIZE x SIZE keeping the aspect ratio, centred on grey 114.
+    h, w = frame.shape[:2]
+    scale = min(SIZE / h, SIZE / w)
+    nw, nh = round(w * scale), round(h * scale)
+    top, left = (SIZE - nh) // 2, (SIZE - nw) // 2
+    canvas = np.full((SIZE, SIZE, 3), 114, np.uint8)
+    canvas[top : top + nh, left : left + nw] = cv2.resize(frame, (nw, nh))
+    rows = _session(DETECT).run(None, {"images": _tensor(canvas)})[0][0]
+    names = labels(DETECT)
     return [
-        Box(result.names[int(c)], round(s, 3), round(x1), round(y1), round(x2 - x1), round(y2 - y1))
-        for (x1, y1, x2, y2), s, c in zip(
-            result.boxes.xyxy.tolist(), result.boxes.conf.tolist(), result.boxes.cls.tolist()
+        Box(
+            names[int(c)],
+            round(float(s), 3),
+            round((x1 - left) / scale),
+            round((y1 - top) / scale),
+            round((x2 - x1) / scale),
+            round((y2 - y1) / scale),
         )
+        for x1, y1, x2, y2, s, c in rows
+        if s >= MIN_SCORE
     ]
+
+
+def classify(frame: np.ndarray) -> list[Box]:
+    """The classifier's top class for one BGR frame, if it is sure enough, as a whole-frame box."""
+    # Shorter side to CLASSIFY_SIZE, then the square in the middle.
+    h, w = frame.shape[:2]
+    scale = CLASSIFY_SIZE / min(h, w)
+    resized = cv2.resize(frame, (round(w * scale), round(h * scale)))
+    top = (resized.shape[0] - CLASSIFY_SIZE) // 2
+    left = (resized.shape[1] - CLASSIFY_SIZE) // 2
+    square = resized[top : top + CLASSIFY_SIZE, left : left + CLASSIFY_SIZE]
+    probs = _session(CLASSIFY).run(None, {"images": _tensor(square)})[0][0]
+    best = int(probs.argmax())
+    if probs[best] < MIN_SCORE:
+        return []
+    return [Box(labels(CLASSIFY)[best], round(float(probs[best]), 3), 0, 0, w, h)]
+
+
+def run(model: str, frame: np.ndarray) -> list[Box]:
+    return classify(frame) if model == CLASSIFY else detect(frame)

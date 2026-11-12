@@ -17,8 +17,6 @@
         python-multipart
         pyyaml
         sqlalchemy
-        # Runs the .pt models in models/, and brings PyTorch (nixpkgs' is CPU-only).
-        ultralytics
         uvicorn
       ]
     ))

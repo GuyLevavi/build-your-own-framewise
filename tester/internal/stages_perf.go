@@ -45,7 +45,7 @@ func timedJob(sv *service, tr trace, sc scene, videoID string) (string, float64,
 }
 
 // expectDetectionsWithin compares a time range of a job's stored detections with sc, positions within tolerance px.
-func expectDetectionsWithin(sv *service, jobID string, sc scene, fromS, toS float64, minIoU float64) error {
+func expectDetectionsWithin(sv *service, jobID string, sc scene, size int, fromS, toS float64, minIoU float64) error {
 	r, err := sv.get(fmt.Sprintf("/jobs/%s/detections?from_s=%g&to_s=%g", jobID, fromS, toS), nil)
 	if err != nil {
 		return err
@@ -58,7 +58,7 @@ func expectDetectionsWithin(sv *service, jobID string, sc scene, fromS, toS floa
 		return err
 	}
 	from, to := int(fromS*float64(sc.fps)+0.5), int(toS*float64(sc.fps)+0.5)
-	if err := compareDetectionsWithin(got, sc, from, to, minIoU); err != nil {
+	if err := compareDetectionsAt(got, sc, size, from, to, minIoU); err != nil {
 		return fmt.Errorf("%v. Boxes are stored in the coordinates of the original video, whatever size you run the detector at", err)
 	}
 	sv.harness.Logger.Successf("✓ %d detections between %g and %g s, in %dx%d coordinates", len(got), fromS, toS, sc.width, sc.height)
@@ -137,7 +137,7 @@ func testDownscale(harness *test_case_harness.TestCaseHarness) error {
 		return fmt.Errorf("expected the fast profile to make at least %.1fx the default's frames/s (%.1f), got %.1f (%.2fx). Profile the worker: the model is now a smaller part of each frame's cost", fastSpeedup, fastSpeedup*base, rate, rate/base)
 	}
 	harness.Logger.Successf("✓ %.1f frames/s at 320 (%.2fx the default)", rate, rate/base)
-	if err := expectDetectionsWithin(sv, jobID, sceneHD, 8, 10, 0.7); err != nil {
+	if err := expectDetectionsWithin(sv, jobID, sceneHD, 320, 8, 10, 0.85); err != nil {
 		return err
 	}
 
@@ -243,10 +243,10 @@ func testProcesses(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	if want := len(expectedBoxes(sceneHD, 0, sceneHD.frames-1)); count != int64(want) {
-		return fmt.Errorf("expected %d rows in results.detections for the job, found %d", want, count)
+	if err := expectRowCount(count, sceneHD, 640, 1, "the job"); err != nil {
+		return err
 	}
-	return expectDetectionsWithin(sv, jobID, sceneHD, 8, 10, 0.85)
+	return expectDetectionsWithin(sv, jobID, sceneHD, 640, 8, 10, 0.85)
 }
 
 // perProcessMiB is what each detection process may add to the worker: the

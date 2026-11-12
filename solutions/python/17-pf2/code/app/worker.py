@@ -21,9 +21,9 @@ from app.analysis import (
     Labels,
     detect_chunk,
     detect_frames,
-    ignore_interrupts,
     presence,
     split,
+    start_process,
 )
 from app.errors import FramewiseError
 from app.profiles import Profile
@@ -87,10 +87,16 @@ class Worker:
         self.stop = threading.Event()
         self.pool = self._pool() if settings.processes > 1 else None
 
+    def _threads(self) -> int:
+        """Each pool process's share of the cores this worker may use."""
+        return max(1, len(os.sched_getaffinity(0)) // self.settings.processes)
+
     def _pool(self) -> multiprocessing.pool.Pool:
         # spawn, not fork: this process has threads and database connections.
         context = multiprocessing.get_context("spawn")
-        return context.Pool(self.settings.processes, initializer=ignore_interrupts)
+        return context.Pool(
+            self.settings.processes, initializer=start_process, initargs=(self._threads(),)
+        )
 
     def close(self) -> None:
         if self.pool is not None:

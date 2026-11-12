@@ -1,0 +1,12 @@
+--- a/app/profiles.py
++++ b/app/profiles.py
+@@ -18,6 +18,9 @@
+     # Before labels: which labels exist depends on the model.
+     model: Literal["yolo26n", "yolo26n-cls"] = models.DETECT
+     labels: tuple[str, ...] = Field(default=("person", "car", "bicycle"), min_length=1)
++    # The detector's input is input_size x input_size: smaller is faster, and finds small
++    # objects less well. The model's stride is 32.
++    input_size: int = Field(default=models.SIZE, ge=32, le=1280, multiple_of=32)
+ 
+     @field_validator("labels")
+     @classmethod

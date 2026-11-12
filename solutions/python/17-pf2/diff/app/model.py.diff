@@ -1,0 +1,28 @@
+--- a/app/model.py
++++ b/app/model.py
+@@ -28,12 +28,24 @@
+     h: int
+ 
+ 
++_threads = 0  # threads per model call; 0 is onnxruntime's default, one per core
++
++
++def use_threads(n: int) -> None:
++    """How many threads a model call may use in this process. Several processes each using
++    every core only slow each other down. Call it before the first frame."""
++    global _threads
++    _threads = n
++
++
+ @cache
+ def _session(model: str):
+     import onnxruntime  # only when a frame needs it
+ 
++    options = onnxruntime.SessionOptions()
++    options.intra_op_num_threads = _threads
+     path = MODELS / f"{model}.onnx"
+-    return onnxruntime.InferenceSession(str(path), providers=["CPUExecutionProvider"])
++    return onnxruntime.InferenceSession(str(path), options, providers=["CPUExecutionProvider"])
+ 
+ 
+ @cache

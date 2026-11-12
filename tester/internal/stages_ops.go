@@ -435,10 +435,10 @@ func testOutage(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	if want := len(expectedBoxesEvery(sceneLong, 0, sceneLong.frames-1, sparseProfile.every)); n != int64(want) {
-		return fmt.Errorf("expected exactly %d rows in results.detections for that job, found %d", want, n)
+	if err := expectRowCount(n, sceneLong, 640, sparseProfile.every, "that job"); err != nil {
+		return err
 	}
-	harness.Logger.Successf("✓ exactly %d detections", n)
+	harness.Logger.Successf("✓ %d detections", n)
 	if sv.workers[0].exited() {
 		return fmt.Errorf("expected the same worker to keep running, it exited")
 	}

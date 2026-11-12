@@ -2,8 +2,8 @@
 
 The tester puts this directory first on PYTHONPATH, so Python imports this file when it starts,
 in your program and in every process it starts. It changes nothing your code can see, except
-the two things below, both by wrapping the two ways the course's models run:
-onnxruntime.InferenceSession.run, and Ultralytics' AutoBackend.forward for a .pt model.
+the two things below, both by wrapping onnxruntime.InferenceSession.run, which is how the
+course's models run.
 
 - With FRAMEWISE_TRACE=<path>, every model call appends one JSON line to that file:
   {"pid", "t", "model", "n", "w", "h"}: the process, the time, "yolo26n" or "yolo26n-cls", the
@@ -25,7 +25,7 @@ import time
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _TRACE = os.environ.get("FRAMEWISE_TRACE")
-_TARGETS = ("onnxruntime.capi.onnxruntime_inference_collection", "ultralytics.nn.autobackend")
+_TARGET = "onnxruntime.capi.onnxruntime_inference_collection"
 
 
 def _model_name(names_count, task):
@@ -89,26 +89,7 @@ def _patch_onnxruntime(module):
     cls.run = run
 
 
-def _patch_ultralytics(module):
-    cls = module.AutoBackend
-    original = cls.forward
-
-    def forward(self, im, *args, **kwargs):
-        try:
-            fmt = getattr(self, "format", None) or ("pt" if getattr(self, "pt", False) else None)
-            if fmt in ("pt", "torchscript") and sys._getframe(1).f_code.co_name != "warmup":
-                names = getattr(self, "names", None) or {}
-                task = getattr(getattr(self, "model", None), "task", None)
-                images = im.detach().float().cpu().numpy() if hasattr(im, "detach") else im
-                _observe(_model_name(len(names), task), images)
-        except Exception:
-            pass
-        return original(self, im, *args, **kwargs)
-
-    cls.forward = forward
-
-
-_PATCHES = {_TARGETS[0]: _patch_onnxruntime, _TARGETS[1]: _patch_ultralytics}
+_PATCHES = {_TARGET: _patch_onnxruntime}
 
 
 class _Loader(importlib.abc.Loader):

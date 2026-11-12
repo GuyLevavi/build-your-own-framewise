@@ -158,11 +158,13 @@ func (s scene) isPoison(i int) bool {
 // boxesAt lists what the detector reports for frame i with a score of at
 // least minScore, from the golden file (none on a poison frame).
 func (s scene) boxesAt(i int) []box {
-	if s.isPoison(i) {
-		return nil
-	}
+	return s.boxesAtSize(640, i)
+}
+
+// boxesAtSize is boxesAt with the detector run at size.
+func (s scene) boxesAtSize(size, i int) []box {
 	var boxes []box
-	for _, b := range goldenFor(s).Detect[i] {
+	for _, b := range s.rowsAt(size, i) {
 		if b.Score >= minScore {
 			boxes = append(boxes, b)
 		}
@@ -186,9 +188,14 @@ func (s scene) classAt(i int) (string, bool) {
 // presenceFrames are the frames, out of those sampled every `every` frames
 // starting at 0, in which label is visible.
 func (s scene) presenceFrames(label string, every int) []int {
+	return s.presenceFramesAt(640, label, every)
+}
+
+// presenceFramesAt is presenceFrames with the detector run at size.
+func (s scene) presenceFramesAt(size int, label string, every int) []int {
 	var hits []int
 	for i := 0; i < s.frames; i += every {
-		for _, b := range s.boxesAt(i) {
+		for _, b := range s.boxesAtSize(size, i) {
 			if b.Label == label {
 				hits = append(hits, i)
 				break

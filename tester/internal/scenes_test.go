@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"image/jpeg"
 	"math"
+	"sort"
 	"os"
 	"path/filepath"
 	"testing"
@@ -174,6 +175,55 @@ func TestDumpScenes(t *testing.T) {
 	for _, s := range allScenes {
 		if err := os.WriteFile(filepath.Join(dir, s.name+".avi"), s.bytes(), 0o644); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+// Where the tester runs the detector at another size (the model server's 512,
+// the fast profile's 320), it still expects the labels it expects at 640, each
+// boundary within the frame the tester allows anyway.
+func TestSizesAgree(t *testing.T) {
+	for _, s := range allScenes {
+		for size := range goldenFor(s).DetectAt {
+			for _, label := range []string{"person", "car", "bicycle"} {
+				want := groupFrames(s.presenceFrames(label, 1), s.fps, 0.5)
+				got := groupFrames(s.presenceFramesAt(size, label, 1), s.fps, 0.5)
+				ok := len(got) == len(want)
+				for k := 0; ok && k < len(got); k++ {
+					frame := 1/float64(s.fps) + 1e-9
+					ok = math.Abs(got[k].Start-want[k].Start) <= frame && math.Abs(got[k].End-want[k].End) <= frame
+				}
+				if !ok {
+					t.Errorf("%s %s at %d: %s, at 640: %s", s.name, label, size, formatSegments(got), formatSegments(want))
+				}
+			}
+		}
+	}
+}
+
+// The reference itself passes the comparison the stages make, at every size.
+func TestReferencePassesCompare(t *testing.T) {
+	for _, s := range allScenes {
+		sizes := []int{640}
+		for size := range goldenFor(s).DetectAt {
+			sizes = append(sizes, size)
+		}
+		for _, size := range sizes {
+			var got []storedBox
+			for i := range s.frames {
+				boxes := s.boxesAtSize(size, i)
+				sort.SliceStable(boxes, func(a, b int) bool { return boxes[a].Label < boxes[b].Label })
+				for _, b := range boxes {
+					got = append(got, storedBox{float64(i) / float64(s.fps), b})
+				}
+			}
+			if err := compareDetectionsAt(got, s, size, 0, s.frames-1, 0.85); err != nil {
+				t.Errorf("%s at %d: %v", s.name, size, err)
+			}
+			lo, hi := s.rowCount(size, 1)
+			if len(got) < lo || len(got) > hi {
+				t.Errorf("%s at %d: %d rows, outside [%d, %d]", s.name, size, len(got), lo, hi)
+			}
 		}
 	}
 }

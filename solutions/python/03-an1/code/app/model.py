@@ -1,12 +1,14 @@
-"""The detector: models/yolo26n.pt, run with Ultralytics (models/README.md is its contract)."""
+"""The detector, models/yolo26n.onnx, run with onnxruntime (models/README.md is its contract)."""
 
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
+import cv2
 import numpy as np
 
 MODELS = Path(__file__).resolve().parent.parent / "models"
+SIZE = 640  # the detector's input is SIZE x SIZE
 MIN_SCORE = 0.5  # a detection counts from this score
 
 
@@ -21,18 +23,41 @@ class Box:
 
 
 @cache
-def _detector():
-    from ultralytics import YOLO  # PyTorch takes a while to import: only when a frame needs it
+def _session():
+    import onnxruntime  # only when a frame needs it
 
-    return YOLO(str(MODELS / "yolo26n.pt"), task="detect")
+    return onnxruntime.InferenceSession(
+        str(MODELS / "yolo26n.onnx"), providers=["CPUExecutionProvider"]
+    )
+
+
+@cache
+def _labels() -> tuple[str, ...]:
+    return tuple((MODELS / "yolo26n.labels.txt").read_text().splitlines())
 
 
 def detect(frame: np.ndarray) -> list[Box]:
     """What the detector finds in one BGR frame (as OpenCV reads it), in the frame's pixels."""
-    result = _detector()(frame, conf=MIN_SCORE, verbose=False)[0]
+    # Letterbox: scale to fit SIZE x SIZE keeping the aspect ratio, centred on grey 114.
+    h, w = frame.shape[:2]
+    scale = min(SIZE / h, SIZE / w)
+    nw, nh = round(w * scale), round(h * scale)
+    top, left = (SIZE - nh) // 2, (SIZE - nw) // 2
+    canvas = np.full((SIZE, SIZE, 3), 114, np.uint8)
+    canvas[top : top + nh, left : left + nw] = cv2.resize(frame, (nw, nh))
+    # BGR HWC bytes -> RGB CHW floats in 0..1, a batch of one.
+    images = canvas[:, :, ::-1].transpose(2, 0, 1)[None].astype(np.float32) / 255
+    rows = _session().run(None, {"images": images})[0][0]
+    labels = _labels()
     return [
-        Box(result.names[int(c)], round(s, 3), round(x1), round(y1), round(x2 - x1), round(y2 - y1))
-        for (x1, y1, x2, y2), s, c in zip(
-            result.boxes.xyxy.tolist(), result.boxes.conf.tolist(), result.boxes.cls.tolist()
+        Box(
+            labels[int(c)],
+            round(float(s), 3),
+            round((x1 - left) / scale),
+            round((y1 - top) / scale),
+            round((x2 - x1) / scale),
+            round((y2 - y1) / scale),
         )
+        for x1, y1, x2, y2, s, c in rows
+        if s >= MIN_SCORE
     ]

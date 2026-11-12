@@ -9,7 +9,7 @@
  from app.analysis import (
      FrameResult,
      Interrupted,
-@@ -123,12 +125,23 @@
+@@ -128,12 +130,23 @@
              self.pool.shutdown(wait=False, cancel_futures=True)
  
      def run_forever(self) -> None:
@@ -38,7 +38,7 @@
  
      def run(self, job: Job) -> None:
          context = {"job_id": job.id, "attempt": job.attempts}
-@@ -160,6 +173,8 @@
+@@ -165,6 +178,8 @@
                  # worker dying, it costs the job an attempt.
                  log.warning("a detector process died; retrying the job", extra=context)
                  self.store.retry(job.id)

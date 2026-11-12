@@ -115,7 +115,7 @@ func testRemoteDetector(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	if err := compareDetectionsWithin(got, sceneStreet, 20, 40, 0.8); err != nil {
+	if err := compareDetectionsAt(got, sceneStreet, size, 20, 40, 0.85); err != nil {
 		return fmt.Errorf("%v. The model answers in the pixels of its own input (%dx%d, letterboxed); store boxes in the video's", err, size, size)
 	}
 	harness.Logger.Successf("✓ %d detections between 2 and 4 s, in the video's coordinates", len(got))
@@ -133,15 +133,15 @@ func testRemoteDetector(harness *test_case_harness.TestCaseHarness) error {
 	if _, err := sv.expectRemoteDone(hdJob, sceneHD); err != nil {
 		return err
 	}
-	if err := expectDetectionsWithin(sv, hdJob, sceneHD, 8, 10, 0.8); err != nil {
+	if err := expectDetectionsWithin(sv, hdJob, sceneHD, size, 8, 10, 0.85); err != nil {
 		return err
 	}
 	count, err := detectionCount(dbURL, hdJob)
 	if err != nil {
 		return err
 	}
-	if want := len(expectedBoxes(sceneHD, 0, sceneHD.frames-1)); count != int64(want) {
-		return fmt.Errorf("expected %d rows in results.detections for the job, found %d", want, count)
+	if err := expectRowCount(count, sceneHD, size, 1, "the job"); err != nil {
+		return err
 	}
 
 	harness.Logger.Infof("A job with the parked_remote profile (%s on the model server) on the parked clip", classifyModel)
@@ -182,13 +182,14 @@ func testRemoteDetector(harness *test_case_harness.TestCaseHarness) error {
 }
 
 // md2's model server: every request costs batchLatency on top of running the
-// model, and two run at once. The target is a multiple of what sending one
-// frame at a time could reach, measured on this machine before the job.
+// model, and two run at once. The target is a multiple of what sending full
+// batches one at a time could reach, measured on this machine before the job:
+// only keeping both instances busy gets there.
 const (
 	batchLatency   = 300 * time.Millisecond
 	batchMax       = 16
 	batchInstances = 2
-	batchSpeedup   = 5.0
+	batchOverlap   = 1.4
 	batchMemoryMiB = 400
 )
 
@@ -198,13 +199,18 @@ func testBatching(harness *test_case_harness.TestCaseHarness) error {
 		return err
 	}
 	model.set(batchMax, batchInstances, batchLatency, 0)
-	one, err := model.calibrate()
+	one, err := model.calibrate(1)
+	if err != nil {
+		return err
+	}
+	full, err := model.calibrate(batchMax)
 	if err != nil {
 		return err
 	}
 	single := 1 / (batchLatency + one).Seconds()
-	target := batchSpeedup * single
-	harness.Logger.Infof("Each request to the model costs %s plus running it (%.0f ms for one frame on this machine); its config allows batches of %d and %d requests at once. One frame at a time would make %.1f frames/s; the target is %.1f", batchLatency, float64(one.Milliseconds()), batchMax, batchInstances, single, target)
+	serial := batchMax / (batchLatency + full).Seconds()
+	target := batchOverlap * serial
+	harness.Logger.Infof("Each request to the model costs %s plus running it (%.0f ms for one frame, %.0f ms for %d, on this machine); its config allows batches of %d and %d requests at once. One frame at a time would make %.1f frames/s, full batches one at a time %.1f; the target is %.1f", batchLatency, float64(one.Milliseconds()), float64(full.Milliseconds()), batchMax, batchMax, batchInstances, single, serial, target)
 	sv, err := startService(harness, tempDir(harness), env, 1, false)
 	if err != nil {
 		return err
@@ -260,7 +266,7 @@ func testBatching(harness *test_case_harness.TestCaseHarness) error {
 	s := model.snapshot()
 	harness.Logger.Infof("%.1f frames/s; %.1f frames a request on average; at most %d requests at once; the worker peaked at %.0f MiB", s.rate(), s.meanBatch(), s.maxInFlight, mib(peak))
 	if s.rate() < target {
-		return fmt.Errorf("expected at least %.1f frames/s from the model server (%.0fx one frame at a time), got %.1f. %s", target, batchSpeedup, s.rate(), batchHint(s))
+		return fmt.Errorf("expected at least %.1f frames/s from the model server (%.1fx full batches one at a time), got %.1f. %s", target, batchOverlap, s.rate(), batchHint(s))
 	}
 	harness.Logger.Successf("✓ %.1f frames/s (target %.1f)", s.rate(), target)
 	if peak > limit {
@@ -271,8 +277,8 @@ func testBatching(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	if want := len(expectedBoxes(sceneHD, 0, sceneHD.frames-1)); count != int64(want) {
-		return fmt.Errorf("expected %d rows in results.detections for the job, found %d", want, count)
+	if err := expectRowCount(count, sceneHD, 640, 1, "the job"); err != nil {
+		return err
 	}
 	harness.Logger.Successf("✓ %d rows in results.detections", count)
 	return nil
@@ -323,8 +329,8 @@ func testModelFailures(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	if want := len(expectedBoxes(sceneStreet, 0, sceneStreet.frames-1)); count != int64(want) {
-		return fmt.Errorf("expected %d rows in results.detections for the job, found %d. A retried request's frames must be stored once", want, count)
+	if err := expectRowCount(count, sceneStreet, 640, 1, "the job"); err != nil {
+		return fmt.Errorf("%v. A retried request's frames must be stored once", err)
 	}
 	harness.Logger.Successf("✓ DONE with %d rows, after %d answers of 503", count, model.snapshot().busy)
 	model.setFailEvery(0)

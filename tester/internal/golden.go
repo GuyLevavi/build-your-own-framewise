@@ -7,27 +7,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"sync"
 )
 
 // What the course's model reports on every frame of every scene, recorded by
 // tester/golden/make_golden.py (see its header): the detector's boxes in the
-// video's pixels and the classifier's top class, each with its score.
+// video's pixels (at 640, and at the other sizes the tester runs it at on that
+// clip) and the classifier's top class, each with its score.
 //
 //go:embed golden
 var goldenFiles embed.FS
 
 type golden struct {
 	Detect   [][]box
-	Classify []box // Label and Score only
+	DetectAt map[int][][]box // by input size, other than 640
+	Classify []box           // Label and Score only
 }
 
 type goldenFile struct {
-	Scene    string          `json:"scene"`
-	Frames   int             `json:"frames"`
-	Detect   [][][]any       `json:"detect"`   // per frame: [label, score, x, y, w, h]
-	Classify [][]any         `json:"classify"` // per frame: [label, score]
-	Extra    json.RawMessage `json:"generator"`
+	Scene    string               `json:"scene"`
+	Frames   int                  `json:"frames"`
+	Detect   [][][]any            `json:"detect"`    // per frame: [label, score, x, y, w, h]
+	DetectAt map[string][][][]any `json:"detect_at"` // by size, as detect
+	Classify [][]any              `json:"classify"`  // per frame: [label, score]
 }
 
 var (
@@ -69,16 +72,17 @@ func loadGolden(s scene) (*golden, error) {
 	if f.Frames != s.frames || len(f.Detect) != s.frames || len(f.Classify) != s.frames {
 		return nil, fmt.Errorf("it has %d frames, the scene %d: run tester/golden/make_golden.py", len(f.Detect), s.frames)
 	}
-	g := &golden{Detect: make([][]box, s.frames), Classify: make([]box, s.frames)}
-	for i, rows := range f.Detect {
-		for _, r := range rows {
-			if len(r) != 6 {
-				return nil, fmt.Errorf("frame %d: bad row %v", i, r)
-			}
-			g.Detect[i] = append(g.Detect[i], box{
-				Label: r[0].(string), Score: r[1].(float64),
-				X: int(r[2].(float64)), Y: int(r[3].(float64)), W: int(r[4].(float64)), H: int(r[5].(float64)),
-			})
+	g := &golden{DetectAt: map[int][][]box{}, Classify: make([]box, s.frames)}
+	if g.Detect, err = goldenBoxes(f.Detect, s.frames); err != nil {
+		return nil, err
+	}
+	for size, frames := range f.DetectAt {
+		n, err := strconv.Atoi(size)
+		if err != nil {
+			return nil, fmt.Errorf("detect_at: bad size %q", size)
+		}
+		if g.DetectAt[n], err = goldenBoxes(frames, s.frames); err != nil {
+			return nil, fmt.Errorf("detect_at %s: %v", size, err)
 		}
 	}
 	for i, r := range f.Classify {
@@ -88,4 +92,23 @@ func loadGolden(s scene) (*golden, error) {
 		g.Classify[i] = box{Label: r[0].(string), Score: r[1].(float64)}
 	}
 	return g, nil
+}
+
+func goldenBoxes(frames [][][]any, n int) ([][]box, error) {
+	if len(frames) != n {
+		return nil, fmt.Errorf("%d frames, the scene has %d", len(frames), n)
+	}
+	result := make([][]box, n)
+	for i, rows := range frames {
+		for _, r := range rows {
+			if len(r) != 6 {
+				return nil, fmt.Errorf("frame %d: bad row %v", i, r)
+			}
+			result[i] = append(result[i], box{
+				Label: r[0].(string), Score: r[1].(float64),
+				X: int(r[2].(float64)), Y: int(r[3].(float64)), W: int(r[4].(float64)), H: int(r[5].(float64)),
+			})
+		}
+	}
+	return result, nil
 }

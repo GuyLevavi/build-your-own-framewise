@@ -1,8 +1,8 @@
 --- a/app/analysis.py
 +++ b/app/analysis.py
-@@ -1,12 +1,11 @@
+@@ -1,12 +1,10 @@
 -"""Turning detector output into when each label was present."""
-+"""Running the detector over a video, and turning sightings into segments."""
++"""Running the model over a video, and turning sightings into segments."""
  
 -from collections.abc import Iterable
 +from collections.abc import Callable, Iterable, Iterator
@@ -10,13 +10,13 @@
  from pathlib import Path
  
 -import numpy as np
-+import fwdetect
- 
--from app.model import detect
+-
+-from app.model import run
++from app.model import Box, run
  from app.profiles import Profile
  from app.video import frames, open_video
  
-@@ -14,6 +13,28 @@
+@@ -14,6 +12,28 @@
  Labels = dict[str, list[Segment]]
  
  
@@ -24,7 +24,7 @@
 +class FrameResult:
 +    index: int
 +    t_s: float
-+    boxes: list[fwdetect.Box]
++    boxes: list[Box]
 +
 +
 +class Interrupted(Exception):
@@ -34,29 +34,29 @@
 +def detect_frames(
 +    path: Path, profile: Profile, should_stop: Callable[[], bool] = lambda: False
 +) -> Iterator[FrameResult]:
-+    """Run the detector on every sampled frame, one frame at a time."""
++    """Run the model on every sampled frame, one frame at a time."""
 +    with open_video(path) as (capture, info):
 +        for index, frame in frames(capture, profile.every):
 +            if should_stop():
 +                raise Interrupted
-+            yield FrameResult(index, index / info.fps, fwdetect.detect(frame))
++            yield FrameResult(index, index / info.fps, run(profile.model, frame))
 +
 +
  @dataclass
  class _Run:
      start: float
-@@ -36,14 +57,6 @@
+@@ -36,14 +56,6 @@
      }
  
  
--def detect_labels(frame: np.ndarray) -> set[str]:
--    return {box.label for box in detect(frame)}
+-def detect_labels(frame: np.ndarray, profile: Profile) -> set[str]:
+-    return {box.label for box in run(profile.model, frame)}
 -
 -
  def analyze(path: Path, profile: Profile) -> Labels:
 -    with open_video(path) as (capture, info):
 -        sightings = (
--            (index / info.fps, detect_labels(frame))
+-            (index / info.fps, detect_labels(frame, profile))
 -            for index, frame in frames(capture, profile.every)
 -        )
 -        return presence(sightings, profile)
