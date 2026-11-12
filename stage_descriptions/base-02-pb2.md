@@ -31,6 +31,10 @@ The tester runs `probe` on a missing file, a text file named `.mp4`, an empty `.
 - One exception type for "the user's fault", caught once in `main`, is easier to keep consistent than `try` blocks around every call.
 - Search: `python custom exception hierarchy`, `cv2.VideoCapture isOpened`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to show one error type for user errors, caught once in `main`, no traceback for any bad input, and exit codes a script can rely on.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.

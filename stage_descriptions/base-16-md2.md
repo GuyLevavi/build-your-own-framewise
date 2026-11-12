@@ -32,6 +32,10 @@ The trap is reading too much at once. "Read every frame, then send them in batch
 - [`itertools.batched`](https://docs.python.org/3/library/itertools.html#itertools.batched) (Python 3.12) groups any iterator, a generator of frames included, into tuples of N.
 - Search: `numpy preallocate array fill`, `python generator batching`, `throughput vs latency`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to attach profiles to the pull request: your frame rate before and after batching. Expect to be asked what keeping two requests in flight would gain, and what it would need.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.

@@ -38,6 +38,10 @@ Three things that never mattered on one machine matter now. First, startup order
 - [Pod lifecycle: container restart policy](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#restart-policy).
 - Search: `uvicorn host 0.0.0.0 container`, `kubernetes wait for database before start`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to show how the service waits for Postgres in the pod (a `sleep` doesn't count), and which host it listens on by default.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.

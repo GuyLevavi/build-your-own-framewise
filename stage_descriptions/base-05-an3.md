@@ -47,6 +47,10 @@ If `--every` and `--max-gap` went straight into your functions as loose argument
 - A Pydantic [field validator](https://docs.pydantic.dev/latest/concepts/validators/) can check a profile's labels against the detector's labels file.
 - Search: `yaml.safe_load`, `pydantic ValidationError errors loc`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to show how a misspelled key is rejected, where the list of valid labels comes from, and how `--every` and `--max-gap` without `--profile` reuse the profile path rather than a parallel one.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.

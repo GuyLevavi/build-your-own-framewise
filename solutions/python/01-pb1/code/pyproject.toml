@@ -21,7 +21,8 @@ dependencies = [
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.5"]
-# Profilers for the performance stages: uv run --group profile scalene ...
+# Profilers, for the memory (an2) and frame-rate (md2) numbers you show in review:
+# uv run --group profile scalene ...
 profile = ["py-spy>=0.3", "scalene>=1.5"]
 
 [tool.uv]

@@ -36,6 +36,10 @@ On your machine the program runs as you, from a virtualenv that `uv run` keeps u
 - OpenShift docs, [Creating images](https://docs.redhat.com/en/documentation/openshift_container_platform/4.16/html/images/creating-images), section "Support arbitrary user ids".
 - Search: `docker entrypoint exec form pid 1 signals`, `chgrp -R 0 chmod g=u openshift`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to show the image's size next to a single-stage build, and explain the order of your layers.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.

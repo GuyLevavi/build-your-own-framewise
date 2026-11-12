@@ -27,6 +27,10 @@ Python's default for SIGTERM is to die on the spot. Handling it means a stop fla
 - [Kubernetes: termination of pods](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination).
 - Search: `graceful shutdown worker sigterm python`, `terminationGracePeriodSeconds`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to show that the signal handler only sets a flag, and that a worker gives a job back only if the job is still its own.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.

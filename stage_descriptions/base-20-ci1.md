@@ -13,6 +13,7 @@ From here on, nobody merges by hand. A merge request goes into `main` only with 
 
 - `.gitlab-ci.yml` at the root of the repository, with `stages:` that list `lint` before `test`.
 - At least one job in each. The lint job runs `ruff check` (and `ruff format --check`). The test job runs your own tests, kept under `tests/`.
+- Your code as it stands must pass that lint. The ruff that `uv.lock` pins (0.17.4) checks far more by default than unused imports: among others, import order (I001), a `try` that only re-raises (TRY203), and a blind `except Exception` that neither logs the traceback nor re-raises (BLE001). Run `uv run ruff check .` and `uv run ruff format --check .` on your 19 stages of code before you write the pipeline, so the findings don't arrive all at once in CI.
 - Every job up to the test stage runs on merge requests. A job kept to `main` by its `rules:` can't block anything.
 - `UV_CACHE_DIR` points to a folder inside the project, such as `.uv-cache`, and `cache: paths:` lists it. Otherwise every pipeline downloads every package again from the mirror.
 - The jobs take their image from `${CI_IMAGE}`, a project variable that names the CI image in the registry.
@@ -39,6 +40,10 @@ Until now "it passes" meant "it passed on my machine, today". A pipeline runs th
 - [CI/CD YAML syntax reference](https://docs.gitlab.com/ci/yaml/): `stages`, `default`, `cache:key:files`, `services`, `rules`.
 - [Using uv in GitLab CI/CD](https://docs.astral.sh/uv/guides/integration/gitlab/).
 - Search: `gitlab merge request pipeline`, `protected branch pipelines must succeed`.
+
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to say where the pipeline would get its packages on the air-gapped network, and to show that your tests test logic rather than exist for the gate.
 
 ### Hints
 
@@ -85,6 +90,6 @@ Then write a few tests under `tests/` for pure functions you already have: segme
 <details>
 <summary>Hint 3: the usual traps</summary>
 
-`ruff check .` also lints `.uv-cache` (third-party code, full of findings) unless `.gitignore` lists it, since ruff skips what Git ignores. Run the pipeline's commands yourself in a fresh clone before pushing: a file you forgot to commit only fails there. Keep `rules:` that limit jobs to `main` off the lint and test jobs.
+`ruff check .` also lints `.uv-cache` (third-party code, full of findings) unless `.gitignore` lists it, since ruff skips what Git ignores. For your own findings, `ruff check --fix` and `ruff format` handle import order and layout. A catch-all `except Exception` that keeps a worker alive (ap2, wk2) passes once it logs with `log.exception(...)` or `exc_info=True`; if it truly must stay silent, say why with `# noqa: BLE001  # reason`. Don't switch rules off in `[tool.ruff.lint]` just to go green: the reviewer asks for ruff clean. Run the pipeline's commands yourself in a fresh clone before pushing: a file you forgot to commit only fails there. Keep `rules:` that limit jobs to `main` off the lint and test jobs.
 
 </details>

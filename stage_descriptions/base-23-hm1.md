@@ -41,6 +41,10 @@ The pod from im2 hard-coded everything: the database password, a hostPort, an em
 - [Persistent volumes: access modes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes) and [Secrets as environment variables](https://kubernetes.io/docs/concepts/configuration/secret/#using-secrets-as-environment-variables).
 - Search: `openshift route edge termination`, `helm checksum configmap annotation restart`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to explain why liveness and readiness use different endpoints, what makes the pods restart when only the ConfigMap changes, and what would go wrong if migrations weren't a hook that runs before the release.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.
