@@ -89,6 +89,12 @@ jobs:
         with:
           python-version: "3.12"
       - run: make -C tester build
+      # im1 runs the image as OpenShift does, as UID 1000620000. Rootless podman can only use the
+      # UIDs in the user's subuid range, which on the runner stops at 165535.
+      - name: let rootless podman map OpenShift's UIDs
+        run: |
+          sudo usermod --add-subuids 200000-1001000000 --add-subgids 200000-1001000000 "$USER"
+          podman system migrate
       - if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         run: tools/verify_course.sh 1 5
       - if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
