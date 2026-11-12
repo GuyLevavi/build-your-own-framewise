@@ -95,6 +95,9 @@ jobs:
         run: tools/verify_course.sh ${{ inputs.first }} ${{ inputs.last }}
         env:
           VERIFY_ONLY: ${{ inputs.only && '1' || '' }}
+      - if: failure()
+        name: the end of each failing log
+        run: for f in tools/.verify/*-pass.log; do grep -q "Test failed" "$f" && { echo "== $f"; tail -40 "$f"; }; done; true
       - if: always()
         uses: actions/upload-artifact@v4
         with:
