@@ -1,6 +1,6 @@
 --- a/Containerfile
 +++ b/Containerfile
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,29 @@
 +# One image for the API, the worker and migrations: the command picks which.
 +#   podman build --build-arg BASE_IMAGE=<the Python base image in your registry> -t framewise .
 +#   podman run --user 1000620000:0 framewise serve --port 8000 --data-dir /data
@@ -13,7 +13,6 @@
 +    UV_PYTHON_DOWNLOADS=never
 +# Dependencies first: this layer is reused until uv.lock changes.
 +COPY pyproject.toml uv.lock ./
-+COPY vendor vendor
 +RUN uv sync --locked --no-dev --no-install-project
 +COPY app app
 +
@@ -22,6 +21,8 @@
 +WORKDIR /app
 +COPY --from=build /opt/venv /opt/venv
 +COPY --from=build /src/app app
++# The models the research team hands over: app/model.py finds them next to app/.
++COPY models models
 +# OpenShift runs the container as a random UID in group 0 and ignores USER.
 +# Whatever the app writes must belong to group 0 and be group-writable.
 +RUN mkdir -p /data && chgrp -R 0 /app /data && chmod -R g=u /app /data
