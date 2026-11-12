@@ -18,6 +18,10 @@ on:
         description: "Last stage number to verify"
         required: false
         default: ""
+      only:
+        description: "Run each solution on its own stage only, not on every earlier one too"
+        type: boolean
+        default: false
 
 jobs:
   checks:
@@ -89,6 +93,8 @@ jobs:
         run: tools/verify_course.sh 1 5
       - if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: tools/verify_course.sh ${{ inputs.first }} ${{ inputs.last }}
+        env:
+          VERIFY_ONLY: ${{ inputs.only && '1' || '' }}
       - if: always()
         uses: actions/upload-artifact@v4
         with:

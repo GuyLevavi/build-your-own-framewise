@@ -27,7 +27,7 @@ for n in $(seq "$first" "$last"); do
     previous="solutions/python/$(printf %02d $((n - 1)))-${slugs[$((n - 2))]}/code"
   fi
 
-  if tools/run_tests.sh "$solution" "$slug" >"$logs/$n-$slug-pass.log" 2>&1; then
+  if tools/run_tests.sh "$solution" "$slug" ${VERIFY_ONLY:+--only} >"$logs/$n-$slug-pass.log" 2>&1; then
     pass="ok  "
   else
     why="$(grep -a -v 'Test failed' "$logs/$n-$slug-pass.log" | grep -a -o $'\e\\[91m.*' | head -1 | sed $'s/\e\\[[0-9;]*m//g')"
