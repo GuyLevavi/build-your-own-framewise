@@ -37,6 +37,10 @@ How you lock matters as soon as there are two workers. Without a lock, two worke
 - [You Don't Need a Job Queue, Postgres Already Has SKIP LOCKED](https://www.prisma.io/blog/you-dont-need-a-job-queue-postgres-already-has-skip-locked): the claim query (skip the Prisma setup).
 - Search: `postgres as a job queue`, `polling worker loop`, `read committed lost update`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to explain why a plain `FOR UPDATE`, and no lock at all, would both fail where `SKIP LOCKED` works, and to show how much code `serve` lost.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.

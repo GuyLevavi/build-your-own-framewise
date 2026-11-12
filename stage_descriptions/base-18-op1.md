@@ -32,6 +32,10 @@ Database errors used to be bugs, answered with a 500 or not at all. Now one of t
 - FastAPI [custom exception handlers](https://fastapi.tiangolo.com/tutorial/handling-errors/#install-custom-exception-handlers), and libpq's `connect_timeout` (SQLAlchemy: `create_engine(..., connect_args={"connect_timeout": 3})`).
 - Search: `splunk json logs fields`, `liveness vs readiness probe`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to explain why `/ready` asks the database and `/health` must not, and to show the one place that turns database errors into 503.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.

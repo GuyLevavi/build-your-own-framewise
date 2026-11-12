@@ -22,7 +22,7 @@ In production the model doesn't run inside your service. The research team's `.o
   ```
 
 - `FRAMEWISE_MODEL_URL` holds the model server's base URL, such as `http://127.0.0.1:8000`. Workers read it like `DATABASE_URL`.
-- A job whose profile is remote sends its sampled frames to `yolo26n` on the server and never runs the model locally. Its labels and stored detections are what the model finds at the server's input size, with boxes in the video's coordinates.
+- A job whose profile is remote sends its sampled frames to `yolo26n` on the server and never runs the model locally. Its labels and stored detections are what the model finds at the server's input size, with boxes in the video's coordinates, in whole pixels as in rs1.
 - Jobs with local profiles behave exactly as before.
 
 The server speaks [Triton's HTTP API](https://github.com/triton-inference-server/server/blob/main/docs/protocol/README.md), the KServe v2 inference protocol, and serves `yolo26n`:
@@ -46,6 +46,10 @@ The good news is that preparing a frame and reading the answer back don't change
 - Triton's [HTTP/REST protocol](https://github.com/triton-inference-server/server/blob/main/docs/protocol/README.md) and its [binary data extension](https://github.com/triton-inference-server/server/blob/main/docs/protocol/extension_binary_data.md). Sending a frame as JSON numbers works and is many times slower: a 640 x 640 input is 1.2 million floats.
 - The standard library's `urllib.request` is enough here. `tritonclient[http]` speaks the same protocol, if your package mirror has it.
 - Search: `numpy tobytes frombuffer`, `kserve v2 inference protocol`, `triton model configuration max_batch_size`.
+
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to show that where the model runs is one profile setting behind one interface, that the input size comes from the model's metadata, and that the local and remote paths share one tested prepare and read.
 
 ### Hints
 

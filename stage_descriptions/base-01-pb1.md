@@ -28,6 +28,10 @@ The tester writes two synthetic MJPG clips (640×360 at 10 fps: 120 frames and 6
 - The starter code in `app/main.py` prints the size once you uncomment it; the rest is in `VideoCapture`'s `CAP_PROP_*` properties.
 - [Getting Started with Videos](https://docs.opencv.org/4.x/dd/d43/tutorial_py_video_display.html) (OpenCV). Search: `cv2.CAP_PROP_FRAME_COUNT`, `argparse subparsers`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to show a real command-line interface (argparse or typer), JSON on stdout and nothing else there, and no work done at import time. From here on every stage's review also asks for type hints that `basedpyright` (the team's checker) accepts, `ruff` clean, unit tests for pure logic, and a README section for each command.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.

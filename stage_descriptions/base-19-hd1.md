@@ -30,6 +30,10 @@ If authentication is a check pasted at the top of each handler, the next endpoin
 - OWASP: [API2:2023 Broken Authentication](https://owasp.org/API-Security/editions/2023/en/0xa2-broken-authentication/).
 - Search: `timing attack string comparison`, `kubernetes secret environment variable`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to show the one place that checks the key, how it compares keys, and that the key never appears in a log line or a repr.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.

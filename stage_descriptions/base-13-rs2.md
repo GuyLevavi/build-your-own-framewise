@@ -37,6 +37,10 @@ You could compute events in Python while the job runs and store them, but then t
 - [PostgreSQL: window functions tutorial](https://www.postgresql.org/docs/current/tutorial-window.html) (`lag`, running `sum() OVER (ORDER BY ...)`).
 - Search: `gaps and islands sql`, `postgres self join overlapping rectangles`, `common table expressions`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to read your query's plan aloud, and show that every value reaches SQL as a bound parameter, never through an f-string.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.

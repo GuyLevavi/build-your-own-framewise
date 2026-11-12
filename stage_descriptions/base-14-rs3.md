@@ -33,6 +33,10 @@ Episodes need a key that comes from what the episode is, not from when it was wr
 - [`INSERT ... ON CONFLICT`](https://www.postgresql.org/docs/current/sql-insert.html#SQL-ON-CONFLICT).
 - Search: `idempotent consumer`, `at-least-once delivery`, `exactly-once is at-least-once plus idempotence`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to say why you chose your way of removing a failed attempt's rows. Episodes are expected to be written in the same transaction that marks the job DONE, so a job is never DONE without them.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.

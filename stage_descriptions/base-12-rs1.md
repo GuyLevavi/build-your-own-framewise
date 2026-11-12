@@ -11,6 +11,7 @@ So far a job's result is one JSON blob of segments. Anyone who wants to ask a di
 ### Expected behaviour
 
 - A table `results.detections` with at least the columns `job_id`, `t_s`, `label`, `x`, `y`, `w`, `h`: one row per box per analyzed frame, for the labels in the job's profile.
+- `x`, `y`, `w` and `h` are whole numbers: the box in the video's pixels, rounded (`88`, not `88.94`). The endpoint answers them as JSON integers.
 - Workers write them while the job runs, in batches, not one row per statement and not all at the end.
 - `GET /jobs/{id}/detections?from_s=2&to_s=4` answers `{"detections": [{"t_s", "label", "x", "y", "w", "h"}, ...]}` with the boxes in that time range, both ends included, sorted by `t_s` then `label`. Both parameters are optional. An unknown job is 404.
 - A query for one job and a time range can use an index.
@@ -28,6 +29,10 @@ The worker's loop now produces two things per frame: rows to store and sightings
 - [PostgreSQL: multicolumn indexes](https://www.postgresql.org/docs/current/indexes-multicolumn.html) and [`EXPLAIN`](https://www.postgresql.org/docs/current/using-explain.html).
 - SQLAlchemy: "executemany" with a list of dicts in [`Connection.execute`](https://docs.sqlalchemy.org/en/20/tutorial/dbapi_transactions.html#sending-multiple-parameters).
 - Search: `postgres bulk insert performance`, `index column order equality range`.
+
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to show the batched insert and explain why the index's column order fits the query.
 
 ### Hints
 

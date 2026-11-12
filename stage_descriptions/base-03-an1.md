@@ -34,6 +34,10 @@ The tester analyzes a 12-second street clip (a person walks right, a car drives 
 - Create the `InferenceSession` once and reuse it: loading a model costs far more than running it on a frame.
 - Search: `onnxruntime InferenceSession run`, `numpy transpose`, `python dataclass`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to show a unit test that a known box survives the trip through your prepare and read functions, a unit test for turning sightings into segments, and how you checked your preprocessing (boxes drawn back onto a frame). Expect to be asked where the `InferenceSession` is created.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.
@@ -54,7 +58,7 @@ The recipe, for a frame of height `h` and width `w` and S = 640:
 2. Make an S x S canvas filled with 114 and paste the resized frame in its middle; remember the `left` and `top` offsets.
 3. `canvas[:, :, ::-1]` (BGR to RGB), `.transpose(2, 0, 1)` (HWC to CHW), `[None]` (add the batch axis), `.astype(np.float32) / 255`.
 4. `rows = session.run(None, {"images": tensor})[0][0]`: 300 rows of `x1, y1, x2, y2, score, class_id`.
-5. Keep rows with `score >= 0.5`; the frame's box is `x = (x1 - left) / scale`, `w = (x2 - x1) / scale`, and the same for y and h. The label is line `class_id` of `models/yolo26n.labels.txt`.
+5. Keep rows with `score >= 0.5`; the frame's box is `x = round((x1 - left) / scale)`, `w = round((x2 - x1) / scale)`, and the same for y and h: whole pixels of the video, which is how later stages store and serve them. The label is line `class_id` of `models/yolo26n.labels.txt`.
 6. For segments, walk the times in order per label: extend the current segment if the gap to its end is at most `max_gap`, otherwise start a new one.
 
 </details>

@@ -1,10 +1,15 @@
 This is a starting point for {{language_name}} solutions to the "Build your own Framewise"
 challenge, a local course in the CodeCrafters format.
 
-Framewise is a small video analytics service. You'll build it in 30 stages: a command-line tool
-that probes videos and finds motion in them, then an API with a Postgres job queue and workers,
-results in SQL, multi-process performance work, a model server, metrics, and last a pipeline, an
-image, a pod and a Helm chart that ship it.
+Framewise is a small video analytics service. You'll build it in 23 stages: a command-line tool
+that probes videos and finds people, cars and bicycles in them with an object detector, then an
+API with a Postgres job queue and workers, detections and events in SQL, a model server, logs and
+readiness, API keys, and last a pipeline, an image, a pod and a Helm chart that ship it.
+
+Each stage's text has an "In review" section: what a reviewer will ask you to show beyond
+passing the tests. For every stage they also ask for type hints that `basedpyright` (the team's
+checker) accepts, `ruff check` and `ruff format --check` clean, unit tests for pure logic, and a
+README section for each command.
 
 # Running the tests
 

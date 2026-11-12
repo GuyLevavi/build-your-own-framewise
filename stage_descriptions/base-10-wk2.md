@@ -30,6 +30,10 @@ The tester runs with `FRAMEWISE_LEASE_S=3` and `FRAMEWISE_MAX_ATTEMPTS=2`, start
 - [Python `threading.Event`](https://docs.python.org/3/library/threading.html#event-objects) for a heartbeat you can stop.
 - Search: `visibility timeout`, `job queue lease heartbeat`, `poison message`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to say what happens to a job if the heartbeat thread dies while the analysis keeps going.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.
@@ -37,14 +41,14 @@ Try the stage first. Open a hint when you're stuck, one at a time.
 <details>
 <summary>Hint 1: the idea</summary>
 
-Add two columns to jobs, `lease_until` and `attempts`. A job is claimable when it is `PENDING`, or `RUNNING` with `lease_until < now()`. Every claim adds one to `attempts` and sets `lease_until = now() + lease`.
+Add two columns to jobs, `lease_until` and `attempts`. A job is claimable when it is `PENDING`, or `RUNNING` with `lease_until < now()`. A claim first looks at `attempts`: if it has already reached the limit, the job fails; otherwise the claim adds one to `attempts` and sets `lease_until = now() + lease`.
 
 </details>
 
 <details>
 <summary>Hint 2: the shape of a solution</summary>
 
-A new migration (`0002_job_leases.py`) adds the columns. The claim's `WHERE` becomes `status = 'PENDING' OR (status = 'RUNNING' AND lease_until < now())`. Before running a job whose `attempts` already reached the limit, mark it `FAILED` with an error that says it gave up. The heartbeat: a `threading.Thread` that every `lease / 3` seconds runs `UPDATE ... SET lease_until = now() + lease WHERE id = :id AND status = 'RUNNING'`, and stops on a `threading.Event`.
+A new migration (`0002_job_leases.py`) adds the columns. The claim's `WHERE` becomes `status = 'PENDING' OR (status = 'RUNNING' AND lease_until < now())`. In the same transaction, check the count *before* adding one: a claim that finds `attempts >= max_attempts` marks the job `FAILED` with an error that says it gave up, without counting another attempt, and looks for the next job. With a limit of 2 that's two runs and `"attempts": 2`; adding one first and checking after gives 3. The heartbeat: a `threading.Thread` that every `lease / 3` seconds runs `UPDATE ... SET lease_until = now() + lease WHERE id = :id AND status = 'RUNNING'`, and stops on a `threading.Event`. If one renewal raises (the database blinked), log it with `exc_info=True` and try again next beat, rather than letting the thread die.
 
 </details>
 

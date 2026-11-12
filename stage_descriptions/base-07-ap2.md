@@ -10,7 +10,7 @@ Analysis takes as long as the video does. A request that waits for it ties up th
 
 ### Expected behaviour
 
-The server reads its profiles from the YAML file named by `FRAMEWISE_PROFILES` (an3's format).
+The server reads its profiles from the YAML file named by `FRAMEWISE_PROFILES` (an3's format). `default` is not built in: it's a profile in that file like any other, and the tester's file defines it (`every: 1`, `max_gap_s: 0.5`, `person`, `car` and `bicycle`, the same as `analyze` without `--profile`).
 
 - `POST /jobs {"video_id": "...", "profile": "people"}` answers `202 {"id": "...", "status": "PENDING", "video_id": "...", "profile": "people"}` within 2 s, before the analysis is done. `profile` defaults to `default`.
 - `GET /jobs/{id}` answers `200 {"id", "video_id", "profile", "status", "error", "labels"}`. `status` moves from `PENDING` to `RUNNING`, then to `DONE` or `FAILED`. When `DONE`, `labels` holds what `analyze` would print for that profile. When `FAILED`, `error` says why.
@@ -26,6 +26,10 @@ The tester runs a job with the default profile and one with `people` on the stre
 
 - One daemon `threading.Thread` reading job ids from a `queue.Queue` is enough. Two threads now share your job records, so a reader must never see a half-updated job.
 - Search: `python queue.Queue worker thread`, `FastAPI status_code 202`.
+
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to say which part of the code owns the background thread, and show that analysis runs off the event loop.
 
 ### Hints
 
@@ -48,6 +52,6 @@ A `Job` record (id, video_id, profile, status, error, labels) in a dict, guarded
 <details>
 <summary>Hint 3: the usual traps</summary>
 
-If the worker thread raises and nothing catches it, the thread dies and every later job stays PENDING forever: catch exceptions per job inside the loop. Validate the profile name in the handler (422), not in the worker.
+If the worker thread raises and nothing catches it, the thread dies and every later job stays PENDING forever: catch exceptions per job inside the loop, and log them with `log.exception(...)` so the traceback isn't lost. A bare `except Exception: pass` hides bugs, and the linter you add in ci1 rejects a catch-all that neither logs the traceback nor re-raises. Validate the profile name in the handler (422), not in the worker.
 
 </details>

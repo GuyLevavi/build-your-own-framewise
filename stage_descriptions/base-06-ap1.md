@@ -31,6 +31,10 @@ From this stage on, the tester also sets `FRAMEWISE_PROFILES` (a profiles file l
 - FastAPI tutorial: [Request Files](https://fastapi.tiangolo.com/tutorial/request-files/) and [Handling Errors](https://fastapi.tiangolo.com/tutorial/handling-errors/).
 - Search: `UploadFile file.read chunk`, `shutil.copyfileobj`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to show that an upload goes to disk in chunks, that the size limit stops it while it streams, and what happens to the partial file when it fails.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.

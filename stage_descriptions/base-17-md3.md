@@ -37,6 +37,10 @@ Until now a job failed because of its input (pb2's bad files) or because the wor
 - `urllib.request.urlopen(..., timeout=...)` and `urllib.error.HTTPError.code`.
 - Search: `retryable vs non-retryable http status`, `exponential backoff jitter`, `circuit breaker pattern`.
 
+### In review
+
+The tester can't check this part, so a reviewer will: you'll be asked to say which failures you retry and which you don't, and why, and to show a timeout on every call to the model server, the metadata call included.
+
 ### Hints
 
 Try the stage first. Open a hint when you're stuck, one at a time.
