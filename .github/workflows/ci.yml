@@ -9,6 +9,15 @@ on:
   schedule:
     - cron: "0 3 * * 1" # the full course proof, weekly
   workflow_dispatch:
+    inputs:
+      first:
+        description: "First stage number to verify (default: all)"
+        required: false
+        default: ""
+      last:
+        description: "Last stage number to verify"
+        required: false
+        default: ""
 
 jobs:
   checks:
@@ -58,7 +67,8 @@ jobs:
           if ./test.sh pb1; then echo "the starter passes stage 1"; exit 1; fi
 
   # Solution N passes 1..N and solution N-1 fails N: the first five stages on every change, all
-  # thirty weekly (the database stages start Postgres with podman, which the runner has).
+  # thirty weekly (the database stages start Postgres with podman, which the runner has). Run it
+  # by hand for a range: Actions > ci > Run workflow, with first and last stage numbers.
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 240
@@ -78,7 +88,7 @@ jobs:
       - if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         run: tools/verify_course.sh 1 5
       - if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-        run: tools/verify_course.sh
+        run: tools/verify_course.sh ${{ inputs.first }} ${{ inputs.last }}
       - if: always()
         uses: actions/upload-artifact@v4
         with:
