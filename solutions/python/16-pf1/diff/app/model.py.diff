@@ -1,0 +1,42 @@
+--- a/app/model.py
++++ b/app/model.py
+@@ -13,7 +13,7 @@
+ 
+ MODELS = Path(__file__).resolve().parent.parent / "models"
+ DETECT, CLASSIFY = "yolo26n", "yolo26n-cls"
+-SIZE = 640  # the detector's input is SIZE x SIZE
++SIZE = 640  # the detector's input is SIZE x SIZE unless the caller asks for another
+ CLASSIFY_SIZE = 224  # the classifier's
+ MIN_SCORE = 0.5  # a detection, or a top class, counts from this score
+ 
+@@ -47,14 +47,15 @@
+     return image[:, :, ::-1].transpose(2, 0, 1)[None].astype(np.float32) / 255
+ 
+ 
+-def detect(frame: np.ndarray) -> list[Box]:
+-    """What the detector finds in one BGR frame (as OpenCV reads it), in the frame's pixels."""
+-    # Letterbox: scale to fit SIZE x SIZE keeping the aspect ratio, centred on grey 114.
++def detect(frame: np.ndarray, size: int = SIZE) -> list[Box]:
++    """What the detector finds in one BGR frame (as OpenCV reads it), run at size x size,
++    in the frame's pixels. The only code that knows the sizes of both."""
++    # Letterbox: scale to fit size x size keeping the aspect ratio, centred on grey 114.
+     h, w = frame.shape[:2]
+-    scale = min(SIZE / h, SIZE / w)
++    scale = min(size / h, size / w)
+     nw, nh = round(w * scale), round(h * scale)
+-    top, left = (SIZE - nh) // 2, (SIZE - nw) // 2
+-    canvas = np.full((SIZE, SIZE, 3), 114, np.uint8)
++    top, left = (size - nh) // 2, (size - nw) // 2
++    canvas = np.full((size, size, 3), 114, np.uint8)
+     canvas[top : top + nh, left : left + nw] = cv2.resize(frame, (nw, nh))
+     rows = _session(DETECT).run(None, {"images": _tensor(canvas)})[0][0]
+     names = labels(DETECT)
+@@ -88,5 +89,6 @@
+     return [Box(labels(CLASSIFY)[best], round(float(probs[best]), 3), 0, 0, w, h)]
+ 
+ 
+-def run(model: str, frame: np.ndarray) -> list[Box]:
+-    return classify(frame) if model == CLASSIFY else detect(frame)
++def run(model: str, frame: np.ndarray, size: int = SIZE) -> list[Box]:
++    """The model on one frame; size is the detector's input (the classifier's is fixed)."""
++    return classify(frame) if model == CLASSIFY else detect(frame, size)

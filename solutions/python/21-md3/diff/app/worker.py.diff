@@ -24,4 +24,4 @@
 +            self._model = ModelClient(self.settings.model_url, self.settings.model_timeout_s)
          return self._model
  
-     def _pool(self) -> ProcessPoolExecutor:
+     def _threads(self) -> int:

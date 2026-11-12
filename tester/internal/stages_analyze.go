@@ -15,6 +15,10 @@ import (
 
 var defaultProfile = profile{every: 1, maxGapS: 0.5, labels: allLabels}
 
+// sparseProfile is for jobs on the long clip, which only need to run for a
+// while, not to look at every frame.
+var sparseProfile = profile{every: 5, maxGapS: 2, labels: allLabels}
+
 // withEnv sets env for the duration of f (programs inherit the tester's environment).
 func withEnv(env map[string]string, f func()) {
 	for k, v := range env {
@@ -53,12 +57,12 @@ func runMeasured(harness *test_case_harness.TestCaseHarness, env map[string]stri
 	return result, peak, elapsed, err
 }
 
-// analyzeScene runs `analyze <s> args...` with a fresh fwdetect trace and checks
-// the labels against p and the number of detector calls against p.every.
+// analyzeScene runs `analyze <s> args...` with a fresh model trace and checks
+// the labels against p and the number of frames the model ran on against p.every.
 func analyzeScene(harness *test_case_harness.TestCaseHarness, s scene, p profile, maxRSS int64, args ...string) error {
 	path := s.write(tempDir(harness))
 	tr := newTrace(harness)
-	result, peak, elapsed, err := runMeasured(harness, map[string]string{"FWDETECT_TRACE": tr.path}, append([]string{"analyze", path}, args...)...)
+	result, peak, elapsed, err := runMeasured(harness, tr.env(), append([]string{"analyze", path}, args...)...)
 	if err != nil {
 		return err
 	}
@@ -76,14 +80,15 @@ func analyzeScene(harness *test_case_harness.TestCaseHarness, s scene, p profile
 	if err := compareLabels(got, expectedLabels(s, p), s.fps); err != nil {
 		return err
 	}
-	calls, err := tr.lines()
+	lines, err := tr.lines()
 	if err != nil {
 		return err
 	}
-	if want := sampledFrames(s, p); len(calls) != want {
-		return fmt.Errorf("expected fwdetect.detect to be called once per sampled frame (%d frames, every %d: %d calls), got %d calls", s.frames, p.every, want, len(calls))
+	calls := of(lines, p.modelName())
+	if want := sampledFrames(s, p); len(calls) != want || len(calls) != len(lines) {
+		return fmt.Errorf("expected %s to run once on each sampled frame (%d frames, every %d: %d frames) and no other model to run, it ran on %d frames (%d frames for any model)", p.modelName(), s.frames, p.every, want, len(calls), len(lines))
 	}
-	harness.Logger.Successf("✓ %s (%d detector calls, %.1f s)", formatLabels(got), len(calls), elapsed.Seconds())
+	harness.Logger.Successf("✓ %s (%s ran on %d frames, %.1f s)", formatLabels(got), p.modelName(), len(calls), elapsed.Seconds())
 	if maxRSS > 0 {
 		if peak > maxRSS {
 			return fmt.Errorf("expected your program to stay under %.0f MiB of memory (all its processes together), it peaked at %.0f MiB. Read frames one at a time instead of keeping them", mib(maxRSS), mib(peak))
@@ -97,18 +102,19 @@ func testAnalyze(harness *test_case_harness.TestCaseHarness) error {
 	if err := analyzeScene(harness, sceneStreet, defaultProfile, 0); err != nil {
 		return err
 	}
-	if err := analyzeScene(harness, sceneStreet, profile{5, 0.5, allLabels}, 0, "--every", "5"); err != nil {
+	if err := analyzeScene(harness, sceneStreet, profile{every: 5, maxGapS: 0.5, labels: allLabels}, 0, "--every", "5"); err != nil {
 		return err
 	}
-	return analyzeScene(harness, sceneNoisyStreet, profile{2, 0.3, allLabels}, 0, "--every", "2", "--max-gap", "0.3")
+	return analyzeScene(harness, sceneNoisyStreet, profile{every: 2, maxGapS: 0.3, labels: allLabels}, 0, "--every", "2", "--max-gap", "0.3")
 }
 
-// an2's budget: well above Python, NumPy and OpenCV with one frame at a time,
-// well below the ~1 GB the long clip's decoded frames take.
+// an2's budget: well above Python, onnxruntime and the model with one frame at
+// a time (about 170 MB), well below that plus the ~1 GB the long clip's decoded
+// frames take.
 const analyzeLongMaxRSS = 400 << 20
 
 func testAnalyzeLong(harness *test_case_harness.TestCaseHarness) error {
-	return analyzeScene(harness, sceneLong, profile{10, 2, allLabels}, analyzeLongMaxRSS, "--every", "10", "--max-gap", "2")
+	return analyzeScene(harness, sceneLong, profile{every: 10, maxGapS: 2, labels: allLabels}, analyzeLongMaxRSS, "--every", "10", "--max-gap", "2")
 }
 
 const testProfilesYAML = `# Written by the tester.
@@ -125,12 +131,23 @@ profiles:
     every: 5
     max_gap_s: 1.0
     labels: [person, car]
+  sparse:
+    every: 5
+    max_gap_s: 2.0
+    labels: [person, car, bicycle]
+  parked:
+    every: 2
+    max_gap_s: 0.5
+    model: yolo26n-cls
+    labels: [sports_car, convertible]
 `
 
 var testProfiles = map[string]profile{
 	"default": defaultProfile,
-	"people":  {2, 0.5, []string{"person"}},
-	"traffic": {5, 1.0, []string{"person", "car"}},
+	"people":  {every: 2, maxGapS: 0.5, labels: []string{"person"}},
+	"traffic": {every: 5, maxGapS: 1.0, labels: []string{"person", "car"}},
+	"sparse":  sparseProfile,
+	"parked":  {every: 2, maxGapS: 0.5, labels: []string{"sports_car", "convertible"}, model: classifyModel},
 }
 
 func writeProfiles(harness *test_case_harness.TestCaseHarness, content string) string {
@@ -155,6 +172,10 @@ func testProfilesYAMLStage(harness *test_case_harness.TestCaseHarness) error {
 			return fmt.Errorf("profile %s: %v", name, err)
 		}
 	}
+	harness.Logger.Infof("The parked clip: a sports car in front of the camera from 2 to 6 s")
+	if err := analyzeScene(harness, sceneParked, testProfiles["parked"], 0, "--config", config, "--profile", "parked"); err != nil {
+		return fmt.Errorf("profile parked: %v", err)
+	}
 
 	street := sceneStreet.write(tempDir(harness))
 	unknown := random.RandomWord()
@@ -164,6 +185,8 @@ func testProfilesYAMLStage(harness *test_case_harness.TestCaseHarness) error {
 		{"an unknown profile", testProfilesYAML, unknown, unknown},
 		{"every: 0", strings.Replace(testProfilesYAML, "every: 2", "every: 0", 1), "people", "profiles.people.every"},
 		{"an unknown label", strings.Replace(testProfilesYAML, "[person, car]", "[person, dragon]", 1), "traffic", "profiles.traffic.labels"},
+		{"an unknown model", strings.Replace(testProfilesYAML, "model: yolo26n-cls", "model: yolo99", 1), "parked", "profiles.parked.model"},
+		{"a label the model doesn't have", strings.Replace(testProfilesYAML, "[sports_car, convertible]", "[sports_car, person]", 1), "parked", "profiles.parked.labels"},
 		{"a negative max_gap_s", strings.Replace(testProfilesYAML, "max_gap_s: 1.0", "max_gap_s: -1", 1), "traffic", "profiles.traffic.max_gap_s"},
 		{"a misspelled setting", strings.Replace(testProfilesYAML, "max_gap_s: 0.5\n    labels: [person]", "max_gap: 0.5\n    labels: [person]", 1), "people", "profiles.people.max_gap"},
 		{"a file that isn't YAML", "profiles: [unclosed\n", "people", ""},

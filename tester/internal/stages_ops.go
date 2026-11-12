@@ -288,7 +288,7 @@ func testProgress(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	jobID, _, err := sv.submitJob(longID, "")
+	jobID, _, err := sv.submitJob(longID, "sparse")
 	if err != nil {
 		return err
 	}
@@ -379,7 +379,7 @@ func testOutage(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	jobID, _, err := sv.submitJob(longID, "")
+	jobID, _, err := sv.submitJob(longID, "sparse")
 	if err != nil {
 		return err
 	}
@@ -428,17 +428,17 @@ func testOutage(harness *test_case_harness.TestCaseHarness) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 	harness.Logger.Successf("✓ /ready 200 again")
-	if _, err := sv.expectJobDone(jobID, sceneLong, defaultProfile); err != nil {
+	if _, err := sv.expectJobDone(jobID, sceneLong, sparseProfile); err != nil {
 		return fmt.Errorf("the job that was running during the outage: %v", err)
 	}
 	n, err := detectionCount(dbURL, jobID)
 	if err != nil {
 		return err
 	}
-	if want := len(expectedBoxes(sceneLong, 0, sceneLong.frames-1)); n != int64(want) {
-		return fmt.Errorf("expected exactly %d rows in results.detections for that job, found %d", want, n)
+	if err := expectRowCount(n, sceneLong, 640, sparseProfile.every, "that job"); err != nil {
+		return err
 	}
-	harness.Logger.Successf("✓ exactly %d detections", n)
+	harness.Logger.Successf("✓ %d detections", n)
 	if sv.workers[0].exited() {
 		return fmt.Errorf("expected the same worker to keep running, it exited")
 	}

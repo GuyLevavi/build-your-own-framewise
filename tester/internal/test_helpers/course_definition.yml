@@ -26,7 +26,7 @@ languages:
 marketing:
   difficulty: medium
   sample_extension_idea_title: "A real model"
-  sample_extension_idea_description: "Swap fwdetect for YOLO on Triton behind the same job API"
+  sample_extension_idea_description: "Run the models on GPUs on a real Triton behind the same job API"
   testimonials: []
 
 stages:
@@ -48,7 +48,7 @@ stages:
     name: "Analyze a clip"
     difficulty: easy
     marketing_md: |-
-      In this stage, you'll run the shipped detector on sampled frames and report when each label appears.
+      In this stage, you'll run the shipped .onnx detector on sampled frames and report when each label appears.
 
   - slug: "an2"
     name: "Analyze a long clip"
@@ -60,7 +60,7 @@ stages:
     name: "Profiles in YAML"
     difficulty: medium
     marketing_md: |-
-      In this stage, you'll load named analysis profiles from YAML and reject bad ones precisely.
+      In this stage, you'll load named analysis profiles from YAML, let them pick the model, and reject bad ones precisely.
 
   # Serve
   - slug: "ap1"
@@ -124,10 +124,10 @@ stages:
       In this stage, you'll make a retried or rerun job store its results exactly once, detections and episodes alike.
 
   - slug: "pf1"
-    name: "Downscale"
+    name: "Run the model smaller"
     difficulty: medium
     marketing_md: |-
-      In this stage, you'll make 1080p analysis several times faster by running the detector at a smaller size.
+      In this stage, you'll make analysis faster with a profile that runs the detector at a smaller input size.
 
   - slug: "pf2"
     name: "Use every core"
@@ -146,7 +146,7 @@ stages:
     name: "Call a model server"
     difficulty: medium
     marketing_md: |-
-      In this stage, you'll run the detector on a model server that speaks Triton's HTTP protocol, chosen by a profile setting.
+      In this stage, you'll run the models on a model server that speaks Triton's HTTP protocol, chosen by a profile setting.
 
   - slug: "md2"
     name: "Batch and pipeline"

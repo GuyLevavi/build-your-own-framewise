@@ -22,9 +22,9 @@ from app.analysis import (
     Labels,
     detect_chunk,
     detect_frames,
-    ignore_interrupts,
     presence,
     split,
+    start_process,
 )
 from app.errors import FramewiseError
 from app.profiles import Profile
@@ -103,6 +103,10 @@ class Worker:
             self._model = ModelClient(self.settings.model_url, self.settings.model_timeout_s)
         return self._model
 
+    def _threads(self) -> int:
+        """Each pool process's share of the cores this worker may use."""
+        return max(1, len(os.sched_getaffinity(0)) // self.settings.processes)
+
     def _pool(self) -> ProcessPoolExecutor:
         # An executor, not multiprocessing.Pool: when one of its processes dies,
         # an executor fails every pending call with BrokenProcessPool, where a
@@ -111,7 +115,8 @@ class Worker:
         return ProcessPoolExecutor(
             self.settings.processes,
             mp_context=multiprocessing.get_context("spawn"),
-            initializer=ignore_interrupts,
+            initializer=start_process,
+            initargs=(self._threads(),),
         )
 
     def close(self) -> None:
@@ -149,7 +154,7 @@ class Worker:
                     # SIGTERM reached our pool processes too: we're stopping, not crashing.
                     self.store.release(job.id)
                     return
-                # A pool process died (fwdetect aborts on some frames): like a
+                # A pool process died (the model aborts on some frames): like a
                 # worker dying, it costs the job an attempt.
                 log.warning("a detector process died on job %s; retrying it", job.id)
                 self.store.retry(job.id)

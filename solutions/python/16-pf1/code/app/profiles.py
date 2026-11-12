@@ -4,11 +4,10 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, ValidationInfo, field_validator
 
+from app import model as models
 from app.errors import FramewiseError
-
-Label = Literal["person", "car", "bicycle"]
 
 
 class Profile(BaseModel):
@@ -16,7 +15,23 @@ class Profile(BaseModel):
 
     every: int = Field(default=1, ge=1)
     max_gap_s: float = Field(default=0.5, ge=0)
-    labels: tuple[Label, ...] = Field(default=("person", "car", "bicycle"), min_length=1)
+    # Before labels: which labels exist depends on the model.
+    model: Literal["yolo26n", "yolo26n-cls"] = models.DETECT
+    labels: tuple[str, ...] = Field(default=("person", "car", "bicycle"), min_length=1)
+    # The detector's input is input_size x input_size: smaller is faster, and finds small
+    # objects less well. The model's stride is 32.
+    input_size: int = Field(default=models.SIZE, ge=32, le=1280, multiple_of=32)
+
+    @field_validator("labels")
+    @classmethod
+    def _model_has_them(cls, labels: tuple[str, ...], info: ValidationInfo) -> tuple[str, ...]:
+        name = info.data.get("model")
+        if name is None:  # the model itself was invalid, and said so
+            return labels
+        for label in labels:
+            if label not in models.labels(name):
+                raise ValueError(f"{name} has no label {label!r} (models/{name}.labels.txt)")
+        return labels
 
 
 class ProfilesFile(BaseModel):

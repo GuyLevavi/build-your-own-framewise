@@ -262,7 +262,7 @@ func expectResponsive(harness *test_case_harness.TestCaseHarness, s *server, n i
 	}
 	var jobs []string
 	for i := 0; i < n; i++ {
-		body := fmt.Sprintf(`{"video_id": %q}`, longID)
+		body := fmt.Sprintf(`{"video_id": %q, "profile": "sparse"}`, longID)
 		harness.Logger.Infof("POST /jobs %s", body)
 		r, err := s.send("POST", "/jobs", "application/json", []byte(body), nil)
 		if err != nil {
@@ -297,7 +297,7 @@ func expectResponsive(harness *test_case_harness.TestCaseHarness, s *server, n i
 	}
 	harness.Logger.Successf("✓ 200 in %.2f s while jobs run", r.took.Seconds())
 	for _, id := range jobs {
-		if _, err := s.expectJobDone(id, sceneLong, defaultProfile); err != nil {
+		if _, err := s.expectJobDone(id, sceneLong, sparseProfile); err != nil {
 			return err
 		}
 	}
@@ -345,7 +345,7 @@ func testRestart(harness *test_case_harness.TestCaseHarness) error {
 	}
 	var pending []string
 	for i := 0; i < 2; i++ {
-		id, _, err := s.submitJob(longID, "")
+		id, _, err := s.submitJob(longID, "sparse")
 		if err != nil {
 			return err
 		}
@@ -396,7 +396,7 @@ func testRestart(harness *test_case_harness.TestCaseHarness) error {
 	}
 	harness.Logger.Successf("✓ DONE, %s, as before", formatLabels(after))
 	for _, id := range pending {
-		if _, err := s.expectJobDone(id, sceneLong, defaultProfile); err != nil {
+		if _, err := s.expectJobDone(id, sceneLong, sparseProfile); err != nil {
 			return fmt.Errorf("a job submitted before the restart: %v", err)
 		}
 	}

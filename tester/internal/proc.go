@@ -28,7 +28,7 @@ type proc struct {
 // (and the variables in `clear` removed).
 func startProc(harness *test_case_harness.TestCaseHarness, name string, env map[string]string, args ...string) (*proc, error) {
 	for _, k := range []string{"FRAMEWISE_API_KEY", "FRAMEWISE_MAX_UPLOAD_MB", "FRAMEWISE_PROFILES", "FRAMEWISE_EVENTS",
-		"FRAMEWISE_LEASE_S", "FRAMEWISE_MAX_ATTEMPTS", "FRAMEWISE_DETECT_PROCESSES", "DATABASE_URL", "FWDETECT_TRACE",
+		"FRAMEWISE_LEASE_S", "FRAMEWISE_MAX_ATTEMPTS", "FRAMEWISE_DETECT_PROCESSES", "DATABASE_URL", "FRAMEWISE_TRACE",
 		"FRAMEWISE_MODEL_URL", "FRAMEWISE_MODEL_TIMEOUT_S"} {
 		os.Unsetenv(k)
 	}

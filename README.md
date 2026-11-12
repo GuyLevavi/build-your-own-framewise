@@ -7,10 +7,12 @@ survive crashes, results queried in SQL, multi-process performance work, a model
 over Triton's HTTP protocol, metrics, live progress and outage handling. The last five ship it: a
 GitLab pipeline that gates merges, an image, a pod, a Helm chart and a release that is a Git commit.
 
-Computer vision is a black box here. The detector, `fwdetect`, is a small NumPy wheel in
-`packages/fwdetect/` with a written contract: three labels, a cost that grows with pixels and holds
-the GIL, a trace file for the tester, and a frame that crashes the process on purpose. The learning
-is in everything around it. Each stage is chosen so the previous design breaks and has to be
+Computer vision is a black box here, as it is for a backend engineer handed a model by a research
+team. The starter ships two real models as `.onnx` files: Ultralytics' YOLO26 nano detector and
+classifier (`starter_templates/python/code/models/`), with a model card that is their whole
+contract: the input tensor and how to prepare a frame for it, the output and which scores count.
+The learner runs them with onnxruntime in-process, and later on a Triton-style model server, and
+never trains or opens them. The learning is in everything around them. Each stage is chosen so the previous design breaks and has to be
 refactored; the stage text says why, under "Why your design just broke".
 
 Everything is in this one repo: the course, its tester (`tester/`) and the learner's attempt
@@ -77,8 +79,8 @@ modules, every container image in `tools/images.env` (`images/load.sh` loads the
 static helm (`bin/helm`, the flake's `.#helm`). Run it from `nix develop` with podman on the machine;
 `IMAGES=0` or `HELM=` leave those out. The image names in `tools/images.env` are the defaults
 everywhere (the tester, `.gitlab-ci.yml`), so nothing needs setting on either side. Python
-dependencies come from the package index the network mirrors; `fwdetect` is vendored in the starter
-as a wheel.
+dependencies come from the package index the network mirrors (onnxruntime, OpenCV, NumPy and the
+rest; no PyTorch); the models are files in the starter, so nothing is downloaded at run time.
 
 ## Stages
 
@@ -99,10 +101,10 @@ as a wheel.
 | 13 | rs1 | Store detections | analysis split into frames and consumers; batches; an index |
 | 14 | rs2 | Events in SQL | gaps-and-islands with window functions |
 | 15 | rs3 | Retries without duplicates | idempotent writes; episodes keyed by what they are |
-| 16 | pf1 | Downscale | one function owns detector size (fps budget) |
-| 17 | pf2 | Use every core | process pool over frame ranges (speed-up and memory budget) |
+| 16 | pf1 | Run the model smaller | input size becomes a profile setting; one function owns the letterbox (fps budget) |
+| 17 | pf2 | Use every core | process pool over frame ranges, onnxruntime threads shared out (speed-up and memory budget) |
 | 18 | pf3 | When a process dies | `Pool` hangs; executor + attempts |
-| 19 | md1 | Call a model server | the detector becomes a setting; RGB, model size, its own contract |
+| 19 | md1 | Call a model server | where the model runs becomes a setting; the server's input size, FP32 tensors over HTTP |
 | 20 | md2 | Batch and pipeline | one frame at a time → batches in flight, with backpressure (fps and memory budget) |
 | 21 | md3 | When the model server fails | timeouts, retry policy, failing a job clearly |
 | 22 | op1 | Metrics and logs | Prometheus, fps per job, JSON logs with context |
@@ -117,10 +119,11 @@ as a wheel.
 
 Performance targets are relative to the same machine (calibrated in the same test), so they hold on
 a laptop, the pod or CI; pf2 needs at least 2 CPUs. The md stages' targets come from the tester's
-own model server, whose cost per request is fixed. That server is a stand-in for Triton (the KServe
-v2 HTTP protocol, binary tensors, `max_batch_size` and `instance_group` in its config) with the same
-coloured-box rule as fwdetect, so the learner meets Triton's contract before the real one. Not
-covered here: YOLO itself and its pre- and post-processing, the evaluation gate, pushing to Quay,
+own model server, which adds a fixed cost per request. That server is a stand-in for Triton (the
+KServe v2 HTTP protocol, binary tensors, `max_batch_size` and `instance_group` in its config) that
+runs the learner's own `models/*.onnx` with onnxruntime, so the learner meets Triton's contract
+with the same models. Not covered here: training or evaluating a model, the evaluation gate,
+pushing to Quay,
 the live cluster, Splunk and Argo CD's sync. The delivery stages check
 everything up to those: the pipeline's jobs, the image, the pod, the rendered chart and the release
 commit. The assignment covers the rest.
@@ -145,7 +148,7 @@ passing.
 | `starter_templates/` | the source of the starter; `compiled_starters/python` is generated from it |
 | `solutions/python/NN-slug/code` | reference solution for each stage (passes it and all earlier ones) |
 | `solutions/python/NN-slug/diff` | what that stage changed in the learner's files (`app/`, and from ci1 `tests/`, `.gitlab-ci.yml`, `Containerfile`, `deploy/`) |
-| `packages/fwdetect/` | the detector, built into the wheel in `starter_templates/python/code/vendor/` |
+| `starter_templates/python/code/models/` | the two `.onnx` models, their labels and their model card |
 | `dockerfiles/python-3.12.Dockerfile` | the image programs run in (container mode) |
 | `tools/run_tests.sh` | run the tester against one directory, without Nix |
 | `tools/verify_course.sh` | prove every stage: solution N passes 1..N, solution N-1 fails stage N |
@@ -172,9 +175,11 @@ tools/compile.sh                                      # after changing a solutio
 2. Update `solutions/python/NN-slug/code/app/` (and the later stages that build on it), then `tools/compile.sh`.
 3. `make -C tester copy_course_file build && tools/verify_course.sh NN NN`.
 
-Clips are generated at run time, in Go (`tester/internal/scenes.go`); `make -C tester test`
-checks the numbers the stage texts quote. Rebuild the wheel after changing `fwdetect`
-(`uv build packages/fwdetect` and copy it into the starter's `vendor/`).
+Clips are generated at run time, in Go (`tester/internal/scenes.go`), from real photos of a person
+and cars (`tester/internal/assets/`); what the models find in every frame is recorded in
+`tester/internal/golden/` by `tester/golden/make_golden.py`. Re-record after changing a scene or a
+model (that script's header says how); `make -C tester test` checks the numbers the stage texts
+quote.
 
 ## Local deviations from the starter
 

@@ -1,6 +1,6 @@
 In this stage, you'll keep a worker alive and honest when one of its pool processes crashes.
 
-`fwdetect` aborts the process on a dropped-feed frame. Before pf2 that killed the worker, its lease ran out, and the attempts limit failed the job. Now the abort kills a pool process instead, and the worker survives, which sounds better until you see what your pool does next.
+The tester makes onnxruntime abort the process on a dropped-feed frame, as a crash in native code would. Before pf2 that killed the worker, its lease ran out, and the attempts limit failed the job. Now the abort kills a pool process instead, and the worker survives, which sounds better until you see what your pool does next.
 
 ### Expected behaviour
 

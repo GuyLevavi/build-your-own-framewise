@@ -3,8 +3,6 @@ tools/.verify/
 __pycache__/
 *.pyc
 .venv/
-packages/fwdetect/dist/
-packages/fwdetect/uv.lock
 /dist/
 .direnv/
 result

@@ -39,9 +39,9 @@
 +            self._model = ModelClient(self.settings.model_url)
 +        return self._model
  
-     def _pool(self) -> ProcessPoolExecutor:
-         # An executor, not multiprocessing.Pool: when one of its processes dies,
-@@ -166,7 +179,10 @@
+     def _threads(self) -> int:
+         """Each pool process's share of the cores this worker may use."""
+@@ -171,7 +184,10 @@
      def _results(
          self, path: Path, profile: Profile, should_stop: Callable[[], bool]
      ) -> Iterator[FrameResult]:

@@ -45,7 +45,7 @@ func timedJob(sv *service, tr trace, sc scene, videoID string) (string, float64,
 }
 
 // expectDetectionsWithin compares a time range of a job's stored detections with sc, positions within tolerance px.
-func expectDetectionsWithin(sv *service, jobID string, sc scene, fromS, toS float64, tolerance int) error {
+func expectDetectionsWithin(sv *service, jobID string, sc scene, size int, fromS, toS float64, minIoU float64) error {
 	r, err := sv.get(fmt.Sprintf("/jobs/%s/detections?from_s=%g&to_s=%g", jobID, fromS, toS), nil)
 	if err != nil {
 		return err
@@ -58,24 +58,59 @@ func expectDetectionsWithin(sv *service, jobID string, sc scene, fromS, toS floa
 		return err
 	}
 	from, to := int(fromS*float64(sc.fps)+0.5), int(toS*float64(sc.fps)+0.5)
-	if err := compareDetectionsWithin(got, sc, from, to, tolerance); err != nil {
+	if err := compareDetectionsAt(got, sc, size, from, to, minIoU); err != nil {
 		return fmt.Errorf("%v. Boxes are stored in the coordinates of the original video, whatever size you run the detector at", err)
 	}
 	sv.harness.Logger.Successf("✓ %d detections between %g and %g s, in %dx%d coordinates", len(got), fromS, toS, sc.width, sc.height)
 	return nil
 }
 
+// From pf1 the profiles file has a profile that runs the model at 320.
+const perfProfilesYAML = testProfilesYAML + `  fast:
+    every: 1
+    max_gap_s: 0.5
+    labels: [person, car, bicycle]
+    input_size: 320
+`
+
+// timedProfileJob is timedJob with a profile.
+func timedProfileJob(sv *service, tr trace, sc scene, videoID, profileName string, p profile) (string, float64, []traceLine, error) {
+	tr.reset()
+	jobID, _, err := sv.submitJob(videoID, profileName)
+	if err != nil {
+		return "", 0, nil, err
+	}
+	if _, err := sv.expectJobDone(jobID, sc, p); err != nil {
+		return "", 0, nil, err
+	}
+	calls, err := tr.lines()
+	if err != nil {
+		return "", 0, nil, err
+	}
+	return jobID, callRate(calls), calls, nil
+}
+
+func largestInput(calls []traceLine) int {
+	largest := 0
+	for _, c := range calls {
+		largest = max(largest, c.W, c.H)
+	}
+	return largest
+}
+
+// pf1's target: the fast profile against the default, both on the 1080p clip.
+const fastSpeedup = 1.5
+
 func testDownscale(harness *test_case_harness.TestCaseHarness) error {
 	tr := newTrace(harness)
-	_, env, err := workerStage(harness, map[string]string{"FWDETECT_TRACE": tr.path})
+	extra := tr.env()
+	extra["FRAMEWISE_PROFILES"] = writeProfiles(harness, perfProfilesYAML)
+	_, env, err := workerStage(harness, extra)
 	if err != nil {
 		return err
 	}
+	harness.Logger.Infof("Profiles:\n%s", perfProfilesYAML)
 	sv, err := startService(harness, tempDir(harness), env, 1, false)
-	if err != nil {
-		return err
-	}
-	streetID, err := sv.uploadClip("street.avi", sceneStreet.bytes())
 	if err != nil {
 		return err
 	}
@@ -83,31 +118,45 @@ func testDownscale(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	harness.Logger.Infof("Calibrating: a job on the 640x360 street clip")
-	_, base, _, err := timedJob(sv, tr, sceneStreet, streetID)
+	harness.Logger.Infof("A job on the 1920x1080 clip with the default profile")
+	_, base, calls, err := timedJob(sv, tr, sceneHD, hdID)
 	if err != nil {
 		return err
 	}
-	harness.Logger.Successf("✓ %.0f frames/s at 640x360", base)
-	harness.Logger.Infof("A job on the 1920x1080 clip")
-	jobID, rate, calls, err := timedJob(sv, tr, sceneHD, hdID)
+	harness.Logger.Successf("✓ %.1f frames/s, the model's input up to %d px", base, largestInput(calls))
+	fast := profile{every: 1, maxGapS: 0.5, labels: allLabels}
+	harness.Logger.Infof("A job on the same clip with the fast profile (input_size: 320)")
+	jobID, rate, calls, err := timedProfileJob(sv, tr, sceneHD, hdID, "fast", fast)
 	if err != nil {
 		return err
 	}
-	widest := 0
-	for _, c := range calls {
-		widest = max(widest, c.W)
+	if largest := largestInput(calls); largest > 320 {
+		return fmt.Errorf("expected the fast profile to run the model on inputs no larger than 320 px a side, it ran on %d px. The model's input size is a setting of the profile", largest)
 	}
-	const want = 0.35
-	if rate < want*base {
-		return fmt.Errorf("expected at least %.0f frames/s on the 1080p clip (%.2f of the 640x360 rate on this machine), got %.0f; the detector saw frames up to %d px wide. Its cost grows with pixels and its accuracy doesn't", want*base, want, rate, widest)
+	if rate < fastSpeedup*base {
+		return fmt.Errorf("expected the fast profile to make at least %.1fx the default's frames/s (%.1f), got %.1f (%.2fx). Profile the worker: the model is now a smaller part of each frame's cost", fastSpeedup, fastSpeedup*base, rate, rate/base)
 	}
-	harness.Logger.Successf("✓ %.0f frames/s at 1920x1080 (%.2f of the 640x360 rate), frames up to %d px wide", rate, rate/base, widest)
-	return expectDetectionsWithin(sv, jobID, sceneHD, 8, 10, 6)
+	harness.Logger.Successf("✓ %.1f frames/s at 320 (%.2fx the default)", rate, rate/base)
+	if err := expectDetectionsWithin(sv, jobID, sceneHD, 320, 8, 10, 0.85); err != nil {
+		return err
+	}
+
+	harness.Logger.Infof("With input_size: 300 (not a multiple of 32, the model's stride):")
+	config := writeProfiles(harness, strings.Replace(perfProfilesYAML, "input_size: 320", "input_size: 300", 1))
+	result, err := runCLI(harness, "analyze", sceneStreet.write(tempDir(harness)), "--config", config, "--profile", "fast")
+	if err != nil {
+		return err
+	}
+	if err := expectCleanFailure(result, "profiles.fast.input_size"); err != nil {
+		return fmt.Errorf("with input_size: 300: %v", err)
+	}
+	harness.Logger.Successf("✓ exit code %d, stderr names profiles.fast.input_size", result.ExitCode)
+	return nil
 }
 
-// speedupTarget is what n processes must reach against one: 2.2x for 4 cores.
-func speedupTarget(n int) float64 { return 1 + 0.4*float64(n-1) }
+// speedupTarget is what n processes must reach against one: 1.6x for 4 cores (onnxruntime
+// already spreads one process over every core, so the gain is what runs around the model).
+func speedupTarget(n int) float64 { return 1 + 0.2*float64(n-1) }
 
 // detectProcesses is how many processes pf2 asks for: the CPUs this program
 // may use (a container's CPU quota counts), at most 4.
@@ -137,7 +186,8 @@ func testProcesses(harness *test_case_harness.TestCaseHarness) error {
 		return fmt.Errorf("this stage measures a speed-up across processes, and this machine (or its container's CPU quota) gives your program %d CPU. Run it where at least 2 are available: CPUS=2 or more for tools/run_tests.sh, or a pod with a CPU limit of 2", n)
 	}
 	tr := newTrace(harness)
-	dbURL, env, err := workerStage(harness, map[string]string{"FWDETECT_TRACE": tr.path, "FRAMEWISE_DETECT_PROCESSES": "1"})
+	dbURL, env, err := workerStage(harness, map[string]string{"FRAMEWISE_TRACE": tr.path, "FRAMEWISE_DETECT_PROCESSES": "1",
+		"FRAMEWISE_PROFILES": writeProfiles(harness, perfProfilesYAML)})
 	if err != nil {
 		return err
 	}
@@ -151,7 +201,9 @@ func testProcesses(harness *test_case_harness.TestCaseHarness) error {
 		return err
 	}
 	harness.Logger.Infof("FRAMEWISE_DETECT_PROCESSES=1")
+	singleRSS := sampleRSS(sv.workers[0].pid)
 	_, single, _, err := timedJob(sv, tr, sceneHD, hdID)
+	singlePeak, _ := singleRSS.finish()
 	if err != nil {
 		return err
 	}
@@ -183,20 +235,24 @@ func testProcesses(harness *test_case_harness.TestCaseHarness) error {
 		return fmt.Errorf("expected at least %.1fx the one-process rate with %d processes (%.0f frames/s), got %.0f (%.1fx). Profile the parent process: whatever it still does for every frame is your ceiling", target, n, target*single, rate, rate/single)
 	}
 	harness.Logger.Successf("✓ %.1fx faster with %d processes", rate/single, n)
-	limit := int64(300+120*n) << 20
+	limit := singlePeak + int64(n)*perProcessMiB<<20
 	if peak > limit {
-		return fmt.Errorf("expected the worker and its processes to stay under %.0f MiB together, they peaked at %.0f MiB. Frames waiting for a process take memory; so do frames nobody reads yet", mib(limit), mib(peak))
+		return fmt.Errorf("expected the worker and its processes to stay under %.0f MiB together (the one-process peak, %.0f MiB, plus %d MiB a process), they peaked at %.0f MiB. Frames waiting for a process take memory; so do frames nobody reads yet", mib(limit), mib(singlePeak), perProcessMiB, mib(peak))
 	}
 	harness.Logger.Successf("✓ peak %.0f MiB (limit %.0f)", mib(peak), mib(limit))
 	count, err := detectionCount(dbURL, jobID)
 	if err != nil {
 		return err
 	}
-	if want := len(expectedBoxes(sceneHD, 0, sceneHD.frames-1)); count != int64(want) {
-		return fmt.Errorf("expected %d rows in results.detections for the job, found %d", want, count)
+	if err := expectRowCount(count, sceneHD, 640, 1, "the job"); err != nil {
+		return err
 	}
-	return expectDetectionsWithin(sv, jobID, sceneHD, 8, 10, 6)
+	return expectDetectionsWithin(sv, jobID, sceneHD, 640, 8, 10, 0.85)
 }
+
+// perProcessMiB is what each detection process may add to the worker: the
+// model and its runtime's own memory, a few 1080p frames, not a backlog.
+const perProcessMiB = 350
 
 func withValue(env map[string]string, key, value string) map[string]string {
 	result := map[string]string{key: value}
@@ -230,7 +286,7 @@ func testPoolCrash(harness *test_case_harness.TestCaseHarness) error {
 	if err != nil {
 		return err
 	}
-	harness.Logger.Infof("poison.avi kills the process that runs the detector on frame 30")
+	harness.Logger.Infof("poison.avi kills the process that runs the model on frame 30")
 	job, err := sv.waitStatus(jobID, 60*time.Second, "FAILED", "DONE")
 	if err != nil {
 		return fmt.Errorf("%v. A pool process died under your worker; is it waiting for an answer that will never come?", err)

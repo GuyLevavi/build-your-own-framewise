@@ -52,9 +52,9 @@ passing, check:
 | --- | --- |
 | pb1 ★ | A real CLI (argparse/typer), JSON on stdout only, nothing at import time. |
 | pb2 | One error type for user errors, caught once in `main`; no tracebacks for bad input; exit codes. |
-| an1 | `detect` called once per frame; segments logic separate from video reading and unit-tested. |
+| an1 | One `InferenceSession`, created once; preprocessing (letterbox, BGR→RGB, /255, CHW) and reading boxes back in small functions with a unit test (a known box survives the round trip); the model called once per sampled frame; segments logic separate from video reading and unit-tested. Ask them how they checked the preprocessing (boxes drawn back onto a frame). |
 | an2 ★ | Frames streamed through a generator, not collected. Ask them to show the memory with Scalene before/after. |
-| an3 | Pydantic (or equivalent) with `extra=forbid`; errors name the field; the CLI flags became a profile, not a parallel path. |
+| an3 | Pydantic (or equivalent) with `extra=forbid`; errors name the field; labels checked against the model's labels file, not a hard-coded list; detector and classifier behind one call that the profile's `model` picks; the CLI flags became a profile, not a parallel path. |
 | ap1 | Upload streamed to disk in chunks; size limit enforced while streaming; temp file removed on failure. |
 | ap2 ★ | Analysis off the event loop (thread or process), with a clear owner; `/health` fast while jobs run. |
 | ap3 ★ | A repository object owns all SQL; migrations, not `create_all`; two schemas used for what they mean. |
@@ -65,10 +65,10 @@ passing, check:
 | rs1 | Batched inserts (executemany), not one statement per row; index matches the query (job_id, t_s). |
 | rs2 ★ | One SQL query with window functions; bound parameters, no f-strings into SQL; they can read the plan. |
 | rs3 | Cleanup in the claim's transaction (or attempt-tagged rows, or upsert); they can say why they chose it. Episodes keyed by a hash of (video, rule, start) with `ON CONFLICT`, written in the same transaction that marks the job DONE. |
-| pf1 | One function owns detector size; profile before/after (Scalene or py-spy) in the PR. |
-| pf2 ★ | Work sent to processes as ranges, not frames; `spawn`; a measured speed-up in the PR; memory bounded. |
+| pf1 | `input_size` validated in the profile (multiple of 32); one function owns the letterbox and undoing it; profile before/after (Scalene or py-spy) in the PR. |
+| pf2 ★ | Work sent to processes as ranges, not frames; `spawn`; onnxruntime's threads split between processes (`intra_op_num_threads`), and they can say what happens without that; a measured speed-up in the PR; memory bounded. |
 | pf3 | A dead pool process costs an attempt and replaces the pool; no hang. |
-| md1 ★ | The detector is a profile setting behind one interface, not an `if` scattered through the worker; the model's size and limits read from its metadata and config, not hard-coded; BGR→RGB and the box scaling in one place, unit-tested. |
+| md1 ★ | Where the model runs is a profile setting behind one interface, not an `if` scattered through the worker; the input size read from the model's metadata, not hard-coded; the same prepare/read functions as the local path (letterbox, BGR→RGB, /255, boxes back to the video's pixels), unit-tested once. |
 | md2 ★ | Batches of `max_batch_size`; requests in flight bounded by the model's instances; the reader blocks when they're all out (no `Executor.map` over the whole video). Ask them to show the memory with and without the bound. |
 | md3 | One retry policy in the client: 503 and connection errors retried with backoff, 4xx and 500 not; a timeout on every call, metadata included; the job's error names the model server. |
 | op1 | Context in log fields (`extra`), JSON formatting in one place; no ids in metric labels; job counts and frames from the DB; fps computed in the worker and stored with the job. |
