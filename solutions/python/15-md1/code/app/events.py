@@ -20,7 +20,7 @@ class EventRule(BaseModel):
     @classmethod
     def _detector_has_them(cls, labels: tuple[str, str]) -> tuple[str, str]:
         for label in labels:
-            if label not in model.labels(model.DETECT):
+            if label not in model.labels():
                 raise ValueError(f"the detector has no label {label!r} (models/yolo26n.labels.txt)")
         return labels
 
