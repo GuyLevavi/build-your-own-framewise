@@ -8,12 +8,14 @@ A pod on a workstation becomes a set of objects in the cluster: Deployments that
 - **Deployment**: keeps N copies (replicas) of a pod running. **Service**: one stable address in front of a Deployment's pods. **Route**: OpenShift's way to reach a Service from outside.
 - **Secret**: like a ConfigMap, for passwords; created outside Git and read through `secretKeyRef`.
 - **PersistentVolumeClaim (PVC)**: a request for storage that outlives pods. `ReadWriteMany` lets pods on different nodes share it.
+- **Helm hook**: a template Helm runs at a set moment of a release instead of with everything else, such as a Job before an upgrade.
 
 ### Expected behaviour
 
 The chart lives in `deploy/chart/`, with `Chart.yaml`, `values.yaml` and `values-nonprod.yaml`. `image.tag` is set in `values-nonprod.yaml`. Rendered with `values-nonprod.yaml`, it produces the following:
 
 - **Workloads:** one Deployment whose container runs `serve`, another that runs `work`, and a Job that runs `migrate`. All of them use the image tag from `image.tag`.
+- **Migrations first:** the migrate Job is a Helm hook, `helm.sh/hook: pre-install,pre-upgrade`, so every install and upgrade changes the schema before it starts new pods.
 - **API container:**
   - `serve` listens on `0.0.0.0`;
   - `livenessProbe` is an `httpGet` on `/health`, and `readinessProbe` is an `httpGet` on `/ready`;
@@ -29,12 +31,13 @@ The tester runs `helm lint deploy/chart -f deploy/chart/values-nonprod.yaml`, th
 
 ### Why your design just broke
 
-The pod from im2 hard-coded everything: the database password, a hostPort, an emptyDir that vanishes with the pod. In a cluster, each of those becomes its own object, owned by someone else and changed at its own pace. A Secret is created outside Git. Storage outlives pods. Several workers on different nodes share one volume. The probes decide when Kubernetes restarts a pod or stops sending it traffic. A liveness probe that checks the database turns a database outage into every pod restarting.
+The pod from im2 hard-coded everything: the database password, a hostPort, an emptyDir that vanishes with the pod. In a cluster, each of those becomes its own object, owned by someone else and changed at its own pace. A Secret is created outside Git. Storage outlives pods. Several workers on different nodes share one volume. The probes decide when Kubernetes restarts a pod or stops sending it traffic. A liveness probe that checks the database turns a database outage into every pod restarting. And order matters again, across releases this time: a migration that runs after the new pods start serves new code against the old schema.
 
 ### Pointers
 
 - [Helm Chart Template Guide](https://helm.sh/docs/chart_template_guide/getting_started/), through values files and named templates.
 - [Configure Liveness, Readiness and Startup Probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
+- [Chart hooks](https://helm.sh/docs/topics/charts_hooks/) (`pre-install`, `pre-upgrade`, `hook-delete-policy`).
 - [Persistent volumes: access modes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes) and [Secrets as environment variables](https://kubernetes.io/docs/concepts/configuration/secret/#using-secrets-as-environment-variables).
 - Search: `openshift route edge termination`, `helm checksum configmap annotation restart`.
 
@@ -61,7 +64,7 @@ env:
       secretKeyRef: {name: {{ .Values.database.secret }}, key: url}
 ```
 
-The Service's `selector` must match the API pods' labels and not the worker's (give them different `app.kubernetes.io/component` labels).
+The Service's `selector` must match the API pods' labels and not the worker's (give them different `app.kubernetes.io/component` labels). The migrate Job's `metadata.annotations` get `helm.sh/hook: pre-install,pre-upgrade` and `helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded`, so a finished Job doesn't block the next release.
 
 </details>
 

@@ -58,7 +58,7 @@ make copy_course_file   # refresh internal/test_helpers/course_definition.yml fr
   `models/*.onnx` in Python backend processes (`internal/hook/model_backend.py`, onnxruntime).
   md2 adds a fixed latency per request and sets its target from the model's measured speed on the
   machine. It can answer 503, hang, refuse connections, or fail with 500 on a grey frame (md3).
-- **Delivery stages** (`stages_ship.go`, `gitlab_ci.go`, `engine.go`, `manifests.go`): ci1 to hm2
+- **Delivery stages** (`stages_ship.go`, `gitlab_ci.go`, `engine.go`, `manifests.go`): ci1 to hm1
   drive podman, helm and git on the machine instead of `./your_program.sh`. ci1 runs the jobs of
   `.gitlab-ci.yml` up to the test stage the way a Docker-executor runner does (job image, services
   in one pod, cache folders kept between runs, a fresh git clone as the workspace), three times:
@@ -66,6 +66,5 @@ make copy_course_file   # refresh internal/test_helpers/course_definition.yml fr
   with planted `.env`/`.git`/`.venv`/`tests` files, inspects the exported filesystem, and runs
   `migrate`, `serve` and `work` from the image as UID 1000620000 in group 0. im2 runs
   `podman kube play deploy/pod.yaml`, a job, a crashed worker and another job. hm1 lints and
-  renders the chart and checks the objects; hm2 runs the deploy job's script against a bare
-  repository that its push URL is rewritten to, then renders before, after and after a revert.
+  renders the chart and checks the objects, the migrate Job's Helm hook included.
   `FRAMEWISE_CI_IMAGE`, `FRAMEWISE_BASE_IMAGE` and `FRAMEWISE_POSTGRES_IMAGE` pick the images.

@@ -6,7 +6,7 @@ yourself, and what to look for at each stage.
 
 ## The fast track
 
-You don't need to build all 24 stages to review them. Work in `attempts/python/`, the way a
+You don't need to build all 23 stages to review them. Work in `attempts/python/`, the way a
 learner does, on a branch of your own; `./test.sh` builds the tester from `tester/` and runs it.
 Then, for each stage:
 
@@ -72,8 +72,7 @@ passing, check:
 | ci1 | Cheap stages first; `cache:key:files: [uv.lock]`; `uv sync --locked`, not a bare install; tests that test logic, not a smoke test written for the gate. Ask where the pipeline would get packages from on the airgapped network. |
 | im1 ★ | Dependencies installed before `COPY app` (layer reuse); exec-form `ENTRYPOINT`; nothing written at startup; ask them to show the size against a single-stage build. |
 | im2 | Waiting for Postgres in the pod, not a `sleep`; `--host` with a safe default; the pod YAML reads like the manifests that come next. |
-| hm1 ★ | Liveness on `/health`, readiness on `/ready`, and they can say why; a checksum annotation so a ConfigMap change rolls the pods; nothing secret in values files. |
-| hm2 ★ | `[skip ci]` and why; the deploy job touches only the tag; PreSync for migrations; ask what a failed sync looks like against an unhealthy app. The live part (Quay push, Argo sync, a revert in nonprod) happens in the assignment, with devops. |
+| hm1 ★ | Liveness on `/health`, readiness on `/ready`, and they can say why; a checksum annotation so a ConfigMap change rolls the pods; the migrate Job as a `pre-install,pre-upgrade` hook, and they can say what goes wrong without it; nothing secret in values files. |
 
 ## Things the tester can't check
 

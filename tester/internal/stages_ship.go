@@ -550,6 +550,11 @@ func checkManifests(harness *test_case_harness.TestCaseHarness, docs []kobj, ren
 		return fmt.Errorf("expected a Job that runs `migrate`, found none")
 	}
 	harness.Logger.Successf("✓ Deployments %s (serve) and %s (work), Job %s (migrate)", nameOf(apiD), nameOf(workerD), nameOf(migrateD))
+	hook := str(migrateD, "metadata", "annotations", "helm.sh/hook")
+	if !strings.Contains(hook, "pre-install") || !strings.Contains(hook, "pre-upgrade") {
+		return fmt.Errorf(`expected the migrate Job to carry the annotation helm.sh/hook: pre-install,pre-upgrade, so the schema changes before new pods start; got %q`, hook)
+	}
+	harness.Logger.Successf("✓ migrations run as a pre-install, pre-upgrade hook")
 
 	for where, image := range appImages(docs) {
 		if imageTag(image) != tag {
@@ -729,7 +734,7 @@ func hasObject(docs []kobj, kind, name string) bool {
 	return false
 }
 
-// ---- hm2: Release by commit
+// A fake GitLab for the CI engine's tests (gitlab_ci_test.go).
 
 const (
 	fakeGitLab      = "gitlab.tester.invalid"
@@ -738,171 +743,7 @@ const (
 	jobToken        = "tester-job-token"
 )
 
-func testReleaseByCommit(harness *test_case_harness.TestCaseHarness) error {
-	for tool, why := range map[string]string{"git": "it runs your deploy job against a scratch repository", "helm": "it renders your chart before and after the release"} {
-		if _, err := needTool(tool, why); err != nil {
-			return err
-		}
-	}
-	dir := repoDir(harness)
-	cfg, err := loadCI(dir)
-	if err != nil {
-		return err
-	}
-	if err := chartFiles(dir); err != nil {
-		return err
-	}
-	test, build, deploy := cfg.stageIndex("test"), cfg.stageIndex("build"), cfg.stageIndex("deploy")
-	if build < 0 || deploy < 0 || !(test < build && build < deploy) {
-		return fmt.Errorf("expected stages: to have test, build and deploy in that order, got %v", cfg.stages)
-	}
-	builds, deploys := cfg.stageJobs("build"), cfg.stageJobs("deploy")
-	if len(builds) != 1 || len(deploys) != 1 {
-		return fmt.Errorf("expected one job in the build stage and one in the deploy stage, got %d and %d", len(builds), len(deploys))
-	}
-	b, d := builds[0], deploys[0]
-	for _, j := range []*ciJob{b, d} {
-		if !onlyOnDefaultBranch(j) {
-			return fmt.Errorf("expected job %q to run only on the default branch (rules: - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH): a merge request must not release", j.name)
-		}
-	}
-	if !containsAny(strings.Join(b.script, "\n"), "CI_COMMIT_SHORT_SHA", "CI_COMMIT_SHA") {
-		return fmt.Errorf("expected job %q to tag the image with the commit (CI_COMMIT_SHORT_SHA), so every release is one commit", b.name)
-	}
-	if !containsAny(strings.Join(d.needs, " "), b.name) {
-		return fmt.Errorf("expected job %q to have needs: [%s]: no release without an image", d.name, b.name)
-	}
-	harness.Logger.Successf("✓ %s: %s builds on the default branch, %s releases after it", ciFile, b.name, d.name)
-
-	app, err := readYAMLFile(filepath.Join(dir, "deploy", "argocd-application.yaml"))
-	if err != nil {
-		return fmt.Errorf("expected deploy/argocd-application.yaml, the one kobj to hand devops: %v", err)
-	}
-	switch {
-	case kindOf(app) != "Application":
-		return fmt.Errorf("expected deploy/argocd-application.yaml to be an Argo CD Application, got kind %q", kindOf(app))
-	case strings.Trim(str(app, "spec", "source", "path"), "/") != chartDir:
-		return fmt.Errorf("expected the Application's spec.source.path to be %s, got %q", chartDir, str(app, "spec", "source", "path"))
-	case !containsAny(fmt.Sprint(at(app, "spec", "source", "helm", "valueFiles")), "values-nonprod.yaml"):
-		return fmt.Errorf("expected the Application's spec.source.helm.valueFiles to list values-nonprod.yaml")
-	case at(app, "spec", "syncPolicy", "automated", "selfHeal") != true:
-		return fmt.Errorf("expected the Application to sync automatically with selfHeal: true, so a hand edit in the cluster is undone")
-	}
-	harness.Logger.Successf("✓ the Argo CD Application syncs %s with values-nonprod.yaml and heals drift", chartDir)
-
-	docs, _, err := helmTemplate(dir)
-	if err != nil {
-		return err
-	}
-	migrateD, _ := findContainer(docs, "migrate")
-	if migrateD == nil || str(migrateD, "metadata", "annotations", "argocd.argoproj.io/hook") != "PreSync" {
-		return fmt.Errorf("expected the migrate Job to carry the annotation argocd.argoproj.io/hook: PreSync, so the schema changes before new pods start")
-	}
-	harness.Logger.Successf("✓ migrations run as a PreSync hook")
-	oldTag := imageTag(firstImage(docs))
-
-	// A scratch GitLab: a bare repository that the job's push URLs are rewritten to.
-	tmp := tempDir(harness)
-	origin := filepath.Join(tmp, "origin.git")
-	seed := filepath.Join(tmp, "seed")
-	if _, err := git(tmp, "init", "-q", "--bare", "-b", "main", origin); err != nil {
-		return err
-	}
-	if err := copyRepo(dir, seed); err != nil {
-		return err
-	}
-	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"add", "-A"}, {"commit", "-q", "-m", "The merge being released"}, {"push", "-q", origin, "main"}} {
-		if _, err := git(seed, args...); err != nil {
-			return err
-		}
-	}
-	sha, err := git(seed, "rev-parse", "HEAD")
-	if err != nil {
-		return err
-	}
-	job := filepath.Join(tmp, "job")
-	remote := fmt.Sprintf("https://gitlab-ci-token:%s@%s/%s.git", jobToken, fakeGitLab, fakeProjectPath)
-	for _, args := range [][]string{{"clone", "-q", origin, job}, {"-C", job, "checkout", "-q", "--detach", sha}, {"-C", job, "remote", "set-url", "origin", remote}} {
-		if _, err := git(tmp, args...); err != nil {
-			return err
-		}
-	}
-
-	pre := map[string]string{
-		"CI": "true", "GITLAB_CI": "true", "CI_PROJECT_DIR": job, "CI_JOB_NAME": d.name, "CI_JOB_STAGE": "deploy",
-		"CI_COMMIT_SHA": sha, "CI_COMMIT_SHORT_SHA": sha[:8], "CI_COMMIT_BRANCH": "main", "CI_COMMIT_REF_NAME": "main",
-		"CI_DEFAULT_BRANCH": "main", "CI_PIPELINE_SOURCE": "push", "CI_SERVER_HOST": fakeGitLab,
-		"CI_SERVER_URL": "https://" + fakeGitLab, "CI_PROJECT_PATH": fakeProjectPath, "CI_PROJECT_NAME": "framewise",
-		"CI_REPOSITORY_URL": remote, "CI_JOB_TOKEN": jobToken, "DEPLOY_TOKEN": deployToken,
-	}
-	vars := cfg.jobVariables(d, pre)
-	env := gitEnv()
-	for k, v := range vars {
-		env = append(env, k+"="+v)
-	}
-	env = append(env, gitRewrites(origin)...)
-	var script strings.Builder
-	script.WriteString("set -e\n")
-	for _, line := range append(append([]string{}, d.beforeScript...), d.script...) {
-		fmt.Fprintf(&script, "printf '%%s\\n' %s\n%s\n", shellQuote("$ "+line), line)
-	}
-	harness.Logger.Infof("Running job %q's script with sh on this machine, in a clone of a scratch repository (CI_COMMIT_SHORT_SHA=%s)", d.name, sha[:8])
-	out, err := command(job, env, 5*time.Minute, "sh", "-c", script.String())
-	if err != nil {
-		return fmt.Errorf("expected job %q to succeed, it failed (%v):\n%s\nThe tester answers pushes to https://<user>:${DEPLOY_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git and to origin", d.name, err, indent(tail(out, 25)))
-	}
-	harness.Logger.Infof("%s", indent(tail(out, 10)))
-
-	commits, err := git(origin, "rev-list", sha+"..main")
-	if err != nil {
-		return err
-	}
-	if n := len(lines(commits)); n != 1 {
-		return fmt.Errorf("expected job %q to push exactly one commit to main, it pushed %d", d.name, n)
-	}
-	message, _ := git(origin, "log", "-1", "--format=%B", "main")
-	if !containsAny(message, "[skip ci]", "[ci skip]") {
-		return fmt.Errorf("expected the release commit's message to contain [skip ci], or it starts another pipeline that releases again. Got %q", strings.TrimSpace(message))
-	}
-	changed, _ := git(origin, "diff", "--name-only", sha, "main")
-	if changed != chartDir+"/values-nonprod.yaml" {
-		return fmt.Errorf("expected the release commit to change only %s/values-nonprod.yaml, it changed: %s", chartDir, strings.Join(lines(changed), ", "))
-	}
-	harness.Logger.Successf("✓ one commit to main, only values-nonprod.yaml, with [skip ci]: %q", strings.TrimSpace(strings.Split(message, "\n")[0]))
-
-	after := filepath.Join(tmp, "after")
-	if _, err := git(tmp, "clone", "-q", origin, after); err != nil {
-		return err
-	}
-	docs, _, err = helmTemplate(after)
-	if err != nil {
-		return err
-	}
-	for where, image := range appImages(docs) {
-		if imageTag(image) != sha[:8] {
-			return fmt.Errorf("expected %s to run image tag %s after the release, got %q", where, sha[:8], image)
-		}
-	}
-	harness.Logger.Successf("✓ after the release the chart renders image tag %s", sha[:8])
-	if _, err := git(after, "revert", "--no-edit", "HEAD"); err != nil {
-		return err
-	}
-	docs, _, err = helmTemplate(after)
-	if err != nil {
-		return err
-	}
-	if got := imageTag(firstImage(docs)); got != oldTag {
-		return fmt.Errorf("expected git revert of the release to bring back image tag %s, got %s", oldTag, got)
-	}
-	harness.Logger.Successf("✓ git revert brings back image tag %s", oldTag)
-	return nil
-}
-
 // firstImage is the image of the container that runs serve.
-func firstImage(docs []kobj) string {
-	_, c := findContainer(docs, "serve")
-	return str(c, "image")
-}
 
 // gitRewrites point the URLs a deploy job may push to at the scratch repository.
 func gitRewrites(origin string) []string {

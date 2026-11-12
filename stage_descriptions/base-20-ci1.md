@@ -1,6 +1,6 @@
 In this stage, you'll write the GitLab pipeline that stops a broken merge request.
 
-From here on, nobody merges by hand. A merge request goes into `main` only with a green pipeline, so the pipeline is the first reviewer of every change. The last five stages cover what the service needs to be shipped: they're checked with podman, helm and git on your machine, the same tools you use on the workstation.
+From here on, nobody merges by hand. A merge request goes into `main` only with a green pipeline, so the pipeline is the first reviewer of every change. The last four stages cover what the service needs to be shipped: they're checked with podman, helm and git on your machine, the same tools you use on the workstation.
 
 ### New here?
 

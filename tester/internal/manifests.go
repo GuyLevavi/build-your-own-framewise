@@ -13,7 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Kubernetes manifests, as the pod YAML (im2) and the Helm chart (hm1, hm2) produce them.
+// Kubernetes manifests, as the pod YAML (im2) and the Helm chart (hm1) produce them.
 
 type kobj = map[string]any
 

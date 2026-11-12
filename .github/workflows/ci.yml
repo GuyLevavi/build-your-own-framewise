@@ -71,7 +71,7 @@ jobs:
           if ./test.sh pb1; then echo "the starter passes stage 1"; exit 1; fi
 
   # Solution N passes 1..N and solution N-1 fails N: the first five stages on every change, all
-  # twenty-four weekly (the database stages start Postgres with podman, which the runner has). Run it
+  # twenty-three weekly (the database stages start Postgres with podman, which the runner has). Run it
   # by hand for a range: Actions > ci > Run workflow, with first and last stage numbers.
   verify:
     runs-on: ubuntu-latest

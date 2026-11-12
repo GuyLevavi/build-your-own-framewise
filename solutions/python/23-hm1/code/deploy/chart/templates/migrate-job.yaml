@@ -1,9 +1,13 @@
-# Applies the schema. Run it before the Deployments: helm upgrade --install, then wait for it.
+# Applies the schema. A Helm hook: `helm install` and `helm upgrade` run it, and wait for it to
+# succeed, before they create or change anything else, so new pods never meet the old schema.
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ .Release.Name }}-migrate-{{ .Values.image.tag | trunc 12 | trimSuffix "-" }}
   labels: {{- include "framewise.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 1
   template:

@@ -1,15 +1,15 @@
 # Build your own Framewise
 
 A CodeCrafters-style course for a junior backend developer, alongside the Framewise assignment
-(`../framewise/ASSIGNMENTS.md`). In 24 stages, each checked by a black-box tester, the learner
+(`../framewise/ASSIGNMENTS.md`). In 23 stages, each checked by a black-box tester, the learner
 grows a Python CLI into a video-analysis service: an API, a Postgres job queue with workers that
 survive crashes, results queried in SQL, a model server called over Triton's HTTP protocol in
-batches, structured logs and readiness, and API keys. The last five ship it: a GitLab pipeline
-that gates merges, an image, a pod, a Helm chart and a release that is a Git commit.
+batches, structured logs and readiness, and API keys. The last four ship it: a GitLab pipeline
+that gates merges, an image, a pod, and a Helm chart for OpenShift whose migrations run as a hook.
 
 It is written for a backend engineer new to both infrastructure and video. Every stage has a
 "New here?" list of the terms it uses and three levels of hints, from the idea to the shape of a
-solution to the usual traps, each folded away until the learner opens it. Expect about 75 to 100
+solution to the usual traps, each folded away until the learner opens it. Expect about 75 to 95
 hours in all (the table below has an estimate per stage): about two and a half weeks full time, or
 8 to 10 hours a week alongside the ten-week assignment.
 
@@ -67,9 +67,9 @@ the tester creates a `fw_test_*` database per stage and drops it afterwards. Uns
 own with podman. SQL in the solutions sticks to PostgreSQL 14 features; the default image is
 `postgres:18`.
 
-### The delivery stages (ci1 to hm2)
+### The delivery stages (ci1 to hm1)
 
-Stages 20 to 24 need `podman`, `helm` (hm1, hm2) and `git` on the machine, as the assignment's
+Stages 20 to 23 need `podman`, `helm` (hm1) and `git` on the machine, as the assignment's
 workstation has. They run your pipeline's jobs in containers, build and run your image, play your
 pod and render your chart, so in container mode `tools/run_tests.sh` runs them with the tester on
 the host, after the other stages. The images they use: `FRAMEWISE_CI_IMAGE` (the CI job image) and
@@ -114,16 +114,16 @@ rest; no PyTorch); the model is a file in the starter, so nothing is downloaded 
 | 20 | ci1 | Gate merges | "passes on my machine" → a pipeline on a clean clone | 4 |
 | 21 | im1 | Build an image | a checkout as you → an image as a random UID, PID 1 | 4 |
 | 22 | im2 | Run the pod | startup order, `--host`, config from a ConfigMap | 4 |
-| 23 | hm1 | Chart it | one pod → Deployments, Service, Route, Secret, RWX claim | 6 |
-| 24 | hm2 | Release by commit | `helm upgrade` by hand → a commit Argo CD syncs | 4 |
+| 23 | hm1 | Chart it | one pod → Deployments, Service, Route, Secret, RWX claim; migrations as a Helm hook | 6 |
 
-Hours are for a backend engineer new to the domain, using the hints; about 93.5 in all. Someone who
+Hours are for a backend engineer new to the domain, using the hints; about 90 in all. Someone who
 has run Postgres queues or Helm charts before goes much faster through those stages.
 
 Cut from earlier versions of the course, because the assignment doesn't need them: input size as
 a profile setting, multi-process analysis and broken process pools (pf1 to pf3), live progress
 over SSE and LISTEN/NOTIFY, surviving a database outage (beyond readiness), Prometheus metrics,
-keeping several model-server requests in flight, and the classifier model.
+keeping several model-server requests in flight, the classifier model, and releasing by a Git
+commit that Argo CD syncs (the assignment covers Argo CD, with devops).
 
 Performance targets are relative to the same machine (calibrated in the same test), so they hold on
 a laptop, the pod or CI. The md stages' targets come from the tester's
@@ -131,10 +131,9 @@ own model server, which adds a fixed cost per request. That server is a stand-in
 KServe v2 HTTP protocol, binary tensors, `max_batch_size` and `instance_group` in its config) that
 runs the learner's own `models/yolo26n.onnx` with onnxruntime, so the learner meets Triton's
 contract with the same model. Not covered here: training or evaluating a model, the evaluation gate,
-pushing to Quay,
-the live cluster, Splunk and Argo CD's sync. The delivery stages check
-everything up to those: the pipeline's jobs, the image, the pod, the rendered chart and the release
-commit. The assignment covers the rest.
+pushing to Quay, the live cluster, Splunk and Argo CD. The delivery stages check everything up
+to those: the pipeline's jobs, the image, the pod and the rendered chart. The assignment covers
+the rest.
 
 ## Reviewing
 
@@ -164,7 +163,7 @@ passing.
 | `tools/fast_track.sh` | the reviewer's fast track |
 | `tools/brief.py` | the reviewer's brief for a stage |
 | `tools/make_release.sh` | the airgap tarballs |
-| `.github/workflows/ci.yml` | the checks on GitHub: generated files, briefs, the tester's tests, the flake and `./test.sh`, stages 1 to 5 (all 24 weekly) |
+| `.github/workflows/ci.yml` | the checks on GitHub: generated files, briefs, the tester's tests, the flake and `./test.sh`, stages 1 to 5 (all 23 weekly) |
 | `tools/images.env` | the container images the course uses, by default |
 | `.gitlab-ci.yml` | the same pipeline for the airgapped GitLab: shell checks, `compile.sh` is clean, the tester's vet and unit tests, `verify_course.sh` |
 

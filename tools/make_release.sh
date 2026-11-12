@@ -14,7 +14,7 @@
 # in by default:
 #   images/      every image in tools/images.env, saved (images/load.sh loads them into podman);
 #                IMAGES=0 leaves them out
-#   bin/helm     for the chart stages (hm1, hm2): $HELM, else the flake's static `.#helm` when nix
+#   bin/helm     for the chart stages (hm1): $HELM, else the flake's static `.#helm` when nix
 #                is there, else a static helm on PATH; HELM= (empty) leaves it out. It must be a
 #                static linux-amd64 build, like `.#helm` or https://github.com/helm/helm/releases.
 #
