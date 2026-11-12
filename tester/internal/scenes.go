@@ -13,8 +13,7 @@ import (
 
 // A scene is a synthetic clip for the course's model, YOLO26n: real people and
 // cars, cut out of photos (assets/), that move along straight lines on a dark
-// (or dark, noisy) background, or a car parked in front of the camera for the
-// classifier. The tester can't know what a neural network will report from
+// (or dark, noisy) background. The tester can't know what a neural network will report from
 // the geometry alone, so what the model finds in every frame is recorded in
 // golden/<scene>.json by tester/golden/make_golden.py, which runs the course's
 // reference pipeline (the .pt with Ultralytics) on the decoded AVI; the
@@ -109,12 +108,8 @@ var (
 	scenePoison = scene{name: "poison", width: 640, height: 360, fps: 10, frames: 60, poison: []int{30}, objects: []object{
 		passes("person", 150, 0, 59, 20, 500, 150),
 	}}
-	// sceneParked: a sports car parks in front of the camera for four seconds; for the classifier.
-	sceneParked = scene{name: "parked", width: 640, height: 360, fps: 10, frames: 80, objects: []object{
-		{label: "car", sprite: "sports_car", h: 300, path: []keyframe{{20, 70, 30}, {59, 70, 30}}},
-	}}
 
-	allScenes = []scene{sceneStreet, sceneNoisyStreet, sceneLong, sceneHD, scenePoison, sceneParked}
+	allScenes = []scene{sceneStreet, sceneNoisyStreet, sceneLong, sceneHD, scenePoison}
 )
 
 func (o object) spriteName() string {
@@ -170,19 +165,6 @@ func (s scene) boxesAtSize(size, i int) []box {
 		}
 	}
 	return boxes
-}
-
-// classAt is the classifier's top class for frame i, if its probability is at
-// least minScore.
-func (s scene) classAt(i int) (string, bool) {
-	if s.isPoison(i) {
-		return "", false
-	}
-	c := goldenFor(s).Classify[i]
-	if c.Score < minScore {
-		return "", false
-	}
-	return c.Label, true
 }
 
 // presenceFrames are the frames, out of those sampled every `every` frames
@@ -311,15 +293,4 @@ func abs(x int) int {
 		return -x
 	}
 	return x
-}
-
-// classFrames are the sampled frames whose top class is label.
-func (s scene) classFrames(label string, every int) []int {
-	var hits []int
-	for i := 0; i < s.frames; i += every {
-		if c, ok := s.classAt(i); ok && c == label {
-			hits = append(hits, i)
-		}
-	}
-	return hits
 }

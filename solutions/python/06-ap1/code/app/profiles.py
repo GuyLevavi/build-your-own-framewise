@@ -1,10 +1,9 @@
 """Named analysis profiles, loaded from YAML and validated."""
 
 from pathlib import Path
-from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, ValidationInfo, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from app import model as models
 from app.errors import FramewiseError
@@ -15,19 +14,14 @@ class Profile(BaseModel):
 
     every: int = Field(default=1, ge=1)
     max_gap_s: float = Field(default=0.5, ge=0)
-    # Before labels: which labels exist depends on the model.
-    model: Literal["yolo26n", "yolo26n-cls"] = models.DETECT
     labels: tuple[str, ...] = Field(default=("person", "car", "bicycle"), min_length=1)
 
     @field_validator("labels")
     @classmethod
-    def _model_has_them(cls, labels: tuple[str, ...], info: ValidationInfo) -> tuple[str, ...]:
-        name = info.data.get("model")
-        if name is None:  # the model itself was invalid, and said so
-            return labels
+    def _detector_has_them(cls, labels: tuple[str, ...]) -> tuple[str, ...]:
         for label in labels:
-            if label not in models.labels(name):
-                raise ValueError(f"{name} has no label {label!r} (models/{name}.labels.txt)")
+            if label not in models.labels():
+                raise ValueError(f"the detector has no label {label!r} (models/yolo26n.labels.txt)")
         return labels
 
 

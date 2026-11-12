@@ -20,7 +20,7 @@
 #                images the delivery stages (ci1 on) use; defaults are in the airgap tarball
 #   (set `debug: true` in CODE_DIR/codecrafters.yml for verbose tester logs)
 #
-# The delivery stages (ci1, im1, im2, hm1, hm2) build images, run pods and render the chart
+# The delivery stages (ci1, im1, im2, hm1) build images, run pods and render the chart
 # with podman, helm and git on this machine, as you would on a workstation. In container mode
 # they run after the others, with the tester on the host; they never run your program directly.
 set -euo pipefail
@@ -49,7 +49,7 @@ mapfile -t stages < <(awk '
   in_stages && /^    name:/ && slug != "" { gsub(/.*name: *"|".*/, ""); print slug "|" $0; slug = "" }
 ' "$course_dir/course-definition.yml")
 
-host_stages=" ci1 im1 im2 hm1 hm2 "
+host_stages=" ci1 im1 im2 hm1 "
 json="["
 host_json="["
 core_json="["

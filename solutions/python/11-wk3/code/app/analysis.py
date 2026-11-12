@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.model import Box, run
+from app.model import Box, detect
 from app.profiles import Profile
 from app.video import frames, open_video
 
@@ -31,7 +31,7 @@ def detect_frames(
         for index, frame in frames(capture, profile.every):
             if should_stop():
                 raise Interrupted
-            yield FrameResult(index, index / info.fps, run(profile.model, frame))
+            yield FrameResult(index, index / info.fps, detect(frame))
 
 
 @dataclass

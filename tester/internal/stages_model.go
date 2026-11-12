@@ -9,16 +9,10 @@ import (
 )
 
 // From md1 the profiles file has profiles that run the model on the model server.
-const remoteProfilesYAML = perfProfilesYAML + `  remote:
+const remoteProfilesYAML = testProfilesYAML + `  remote:
     every: 1
     max_gap_s: 0.5
     labels: [person, car, bicycle]
-    detector: remote
-  parked_remote:
-    every: 2
-    max_gap_s: 0.5
-    model: yolo26n-cls
-    labels: [sports_car, convertible]
     detector: remote
 `
 
@@ -43,7 +37,7 @@ func modelStage(harness *test_case_harness.TestCaseHarness, size int, extra map[
 	if err != nil {
 		return "", nil, nil, err
 	}
-	harness.Logger.Infof("A model server is at FRAMEWISE_MODEL_URL: models %q (input images [-1, 3, %d, %d]) and %q (GET /v2/models/<name>/config)", detectModel, size, size, classifyModel)
+	harness.Logger.Infof("A model server is at FRAMEWISE_MODEL_URL: model %q (input images [-1, 3, %d, %d]; GET /v2/models/%s and /v2/models/%s/config)", detectModel, size, size, detectModel, detectModel)
 	return dbURL, env, model, nil
 }
 
@@ -144,25 +138,6 @@ func testRemoteDetector(harness *test_case_harness.TestCaseHarness) error {
 		return err
 	}
 
-	harness.Logger.Infof("A job with the parked_remote profile (%s on the model server) on the parked clip", classifyModel)
-	parkedID, err := sv.uploadClip("parked.avi", sceneParked.bytes())
-	if err != nil {
-		return err
-	}
-	model.resetStats()
-	parkedJob, _, err := sv.submitJob(parkedID, "parked_remote")
-	if err != nil {
-		return err
-	}
-	parked := profile{every: 2, maxGapS: 0.5, labels: []string{"sports_car", "convertible"}, model: classifyModel}
-	if _, err := sv.expectJobDone(parkedJob, sceneParked, parked); err != nil {
-		return fmt.Errorf("%v. %s takes %dx%d images, resized (not letterboxed) from the middle of the frame: see models/README.md", err, classifyModel, classifySize, classifySize)
-	}
-	if st := model.snapshot(); st.framesBy[classifyModel] != sampledFrames(sceneParked, parked) {
-		return fmt.Errorf("expected the model server to classify each of the %d sampled frames once, it classified %d", sampledFrames(sceneParked, parked), st.framesBy[classifyModel])
-	}
-	harness.Logger.Successf("✓ classified on the model server")
-
 	harness.Logger.Infof("The default profile still runs the model in your worker")
 	tr.reset()
 	model.resetStats()
@@ -182,14 +157,17 @@ func testRemoteDetector(harness *test_case_harness.TestCaseHarness) error {
 }
 
 // md2's model server: every request costs batchLatency on top of running the
-// model, and two run at once. The target is a multiple of what sending full
-// batches one at a time could reach, measured on this machine before the job:
-// only keeping both instances busy gets there.
+// model. The target is a share of what sending full batches one at a time can
+// reach, measured on this machine before the job. Reading and preparing 1080p
+// frames between requests costs time the calibration doesn't count, so the share
+// is well under 1; one frame a request makes about a fifth of the full-batch
+// rate, so only batches get there. Requests must also carry half a full batch
+// on average.
 const (
 	batchLatency   = 300 * time.Millisecond
 	batchMax       = 16
 	batchInstances = 2
-	batchOverlap   = 1.3
+	batchShare     = 0.4
 	batchMemoryMiB = 1000
 )
 
@@ -209,8 +187,8 @@ func testBatching(harness *test_case_harness.TestCaseHarness) error {
 	}
 	single := 1 / (batchLatency + one).Seconds()
 	serial := batchMax / (batchLatency + full).Seconds()
-	target := batchOverlap * serial
-	harness.Logger.Infof("Each request to the model costs %s plus running it (%.0f ms for one frame, %.0f ms for %d, on this machine); its config allows batches of %d and %d requests at once. One frame at a time would make %.1f frames/s, full batches one at a time %.1f; the target is %.1f", batchLatency, float64(one.Milliseconds()), float64(full.Milliseconds()), batchMax, batchMax, batchInstances, single, serial, target)
+	target := batchShare * serial
+	harness.Logger.Infof("Each request to the model costs %s plus running it (%.0f ms for one frame, %.0f ms for %d, on this machine); its config allows batches of %d. One frame at a time would make %.1f frames/s, full batches one at a time %.1f; the target is %.1f", batchLatency, float64(one.Milliseconds()), float64(full.Milliseconds()), batchMax, batchMax, single, serial, target)
 	sv, err := startService(harness, tempDir(harness), env, 1, false)
 	if err != nil {
 		return err
@@ -266,9 +244,13 @@ func testBatching(harness *test_case_harness.TestCaseHarness) error {
 	s := model.snapshot()
 	harness.Logger.Infof("%.1f frames/s; %.1f frames a request on average; at most %d requests at once; the worker peaked at %.0f MiB", s.rate(), s.meanBatch(), s.maxInFlight, mib(peak))
 	if s.rate() < target {
-		return fmt.Errorf("expected at least %.1f frames/s from the model server (%.1fx full batches one at a time), got %.1f. %s", target, batchOverlap, s.rate(), batchHint(s))
+		return fmt.Errorf("expected at least %.1f frames/s from the model server (%.0f%% of full batches one at a time), got %.1f. %s", target, batchShare*100, s.rate(), batchHint(s))
 	}
 	harness.Logger.Successf("✓ %.1f frames/s (target %.1f)", s.rate(), target)
+	if s.meanBatch() < batchMax/2 {
+		return fmt.Errorf("expected requests to carry at least %d frames on average (max_batch_size is %d), got %.1f", batchMax/2, batchMax, s.meanBatch())
+	}
+	harness.Logger.Successf("✓ %.1f frames a request on average", s.meanBatch())
 	if peak > limit {
 		return fmt.Errorf("expected the worker to stay under %.0f MiB (idle plus %d MiB), it peaked at %.0f MiB after %.1f s. Frames waiting for the model take memory; bound how many are read ahead", mib(limit), batchMemoryMiB, mib(peak), at.Seconds())
 	}
@@ -288,8 +270,6 @@ func batchHint(s modelStats) string {
 	switch {
 	case s.meanBatch() < batchMax/2:
 		return fmt.Sprintf("Your requests carry %.1f frames on average, and each one costs %s however few frames it carries (max_batch_size is in the model's config)", s.meanBatch(), batchLatency)
-	case s.maxInFlight < batchInstances:
-		return fmt.Sprintf("The model runs %d requests at once (instance_group in its config), and you send one at a time", batchInstances)
 	}
 	return "Is the worker reading and resizing frames while it waits for the model?"
 }

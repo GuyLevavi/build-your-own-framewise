@@ -1,0 +1,21 @@
+--- a/app/db.py
++++ b/app/db.py
+@@ -39,6 +39,8 @@
+     sa.Column("labels", sa.JSON),
+     sa.Column("attempts", sa.Integer, nullable=False, server_default="0"),
+     sa.Column("lease_until", sa.DateTime(timezone=True)),
++    sa.Column("frames", sa.Integer),
++    sa.Column("analysis_s", sa.Float),
+     sa.Column(
+         "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+     ),
+@@ -91,7 +93,8 @@
+ 
+ 
+ def make_engine() -> sa.Engine:
+-    return sa.create_engine(database_url(), pool_pre_ping=True)
++    # Fail fast when Postgres is unreachable instead of hanging a request: /ready answers 503.
++    return sa.create_engine(database_url(), pool_pre_ping=True, connect_args={"connect_timeout": 3})
+ 
+ 
+ def migrate() -> None:

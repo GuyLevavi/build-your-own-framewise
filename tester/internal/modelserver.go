@@ -59,10 +59,8 @@ type modelStats struct {
 }
 
 const (
-	detectModel   = "yolo26n"
-	classifyModel = "yolo26n-cls"
-	classifySize  = 224
-	maxInstances  = 2
+	detectModel  = "yolo26n"
+	maxInstances = 2
 )
 
 // servedModel is what the server publishes about a model.
@@ -76,8 +74,6 @@ func (m *modelServer) model(name string) (servedModel, bool) {
 	switch name {
 	case detectModel:
 		return servedModel{detectModel, m.size, []int{300, 6}}, true
-	case classifyModel:
-		return servedModel{classifyModel, classifySize, []int{1000}}, true
 	}
 	return servedModel{}, false
 }
@@ -233,7 +229,7 @@ func modelError(w http.ResponseWriter, status int, format string, args ...any) {
 }
 
 func modelNotFound(w http.ResponseWriter, name string) {
-	modelError(w, 404, "Request for unknown model: '%s' is not found (this server has %s and %s)", name, detectModel, classifyModel)
+	modelError(w, 404, "Request for unknown model: '%s' is not found (this server has %s)", name, detectModel)
 }
 
 func (m *modelServer) metadata(w http.ResponseWriter, r *http.Request) {

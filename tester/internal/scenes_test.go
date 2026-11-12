@@ -33,8 +33,7 @@ func TestScenesFollowTheRules(t *testing.T) {
 }
 
 // The golden files agree with the scenes: the model finds every object where
-// it was drawn, finds nothing that wasn't drawn, and the classifier names the
-// parked car only while it is there.
+// it was drawn and finds nothing that wasn't drawn.
 func TestGoldenMatchesScenes(t *testing.T) {
 	for _, s := range allScenes {
 		for i := range s.frames {
@@ -59,22 +58,8 @@ func TestGoldenMatchesScenes(t *testing.T) {
 					t.Fatalf("%s frame %d: %s drawn at %v, found at %v", s.name, i, label, p, f)
 				}
 			}
-			class, ok := s.classAt(i)
-			_, parked := placedLabel(s, i, "car")
-			if s.name == "parked" && (ok != parked || (ok && class != "sports_car")) {
-				t.Fatalf("parked frame %d: the classifier says %q (%v), the car is there: %v", i, class, ok, parked)
-			}
 		}
 	}
-}
-
-func placedLabel(s scene, i int, label string) (box, bool) {
-	for _, o := range s.objects {
-		if b, ok := o.placedAt(i); ok && b.Label == label {
-			return b, true
-		}
-	}
-	return box{}, false
 }
 
 // The stage texts will quote these numbers; keep them and the scenes in step.
@@ -91,7 +76,6 @@ func TestSceneNumbers(t *testing.T) {
 		{"poison person", groupFrames(scenePoison.presenceFrames("person", 1), 10, 0.5), []segment{{0.0, 5.9}}},
 		{"hd person", groupFrames(sceneHD.presenceFrames("person", 1), 10, 0.5), []segment{{1.0, 19.0}}},
 		{"hd person+car", groupFrames(sceneHD.overlapFrames("person", "car", 1), 10, 0.5), []segment{{7.7, 13.0}}},
-		{"parked sports_car", groupFrames(sceneParked.classFrames("sports_car", 1), 10, 0.5), []segment{{2.0, 5.9}}},
 	}
 	for _, tc := range cases {
 		if !sameSegments(tc.got, tc.expect) {

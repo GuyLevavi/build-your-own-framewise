@@ -1,0 +1,38 @@
+--- a/app/server.py
++++ b/app/server.py
+@@ -4,7 +4,9 @@
+ from dataclasses import dataclass
+ from pathlib import Path
+ 
+-from fastapi import FastAPI, HTTPException, UploadFile
++import sqlalchemy as sa
++from fastapi import FastAPI, HTTPException, Request, UploadFile
++from fastapi.responses import JSONResponse
+ from pydantic import BaseModel
+ 
+ from app.events import EventRule
+@@ -44,10 +46,24 @@
+             raise HTTPException(404, "no such job")
+         return job
+ 
++    @app.exception_handler(sa.exc.DBAPIError)
++    def database_unavailable(request: Request, exc: sa.exc.DBAPIError) -> JSONResponse:
++        # Not our bug and not the client's: the database is away. 503 tells
++        # clients and load balancers to come back later.
++        return JSONResponse({"detail": "database unavailable"}, status_code=503)
++
+     @app.get("/health")
+     def health() -> dict[str, str]:
++        """Liveness: the process answers. Never depends on the database, or an
++        outage would make Kubernetes restart every healthy replica."""
+         return {"status": "ok"}
+ 
++    @app.get("/ready")
++    def ready() -> dict[str, str]:
++        """Readiness: this replica can serve requests right now."""
++        store.ping()
++        return {"status": "ready"}
++
+     @app.post("/videos", status_code=201)
+     def upload(file: UploadFile) -> dict:
+         filename = file.filename or ""

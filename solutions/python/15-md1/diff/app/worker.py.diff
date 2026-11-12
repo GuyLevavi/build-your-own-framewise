@@ -1,0 +1,74 @@
+--- a/app/worker.py
++++ b/app/worker.py
+@@ -8,14 +8,15 @@
+ import logging
+ import os
+ import threading
+-from collections.abc import Callable
++from collections.abc import Callable, Iterator
+ from dataclasses import dataclass
+ from pathlib import Path
+ from typing import Self
+ 
+-from app.analysis import Interrupted, Labels, detect_frames, presence
++from app.analysis import FrameResult, Interrupted, Labels, detect_frames, presence
+ from app.errors import FramewiseError
+ from app.profiles import Profile
++from app.remote import ModelClient, ModelError, remote_frames
+ from app.store import Detection, Job, Status, Store
+ 
+ log = logging.getLogger(__name__)
+@@ -27,12 +28,14 @@
+     max_attempts: int = 3
+     poll_s: float = 0.5
+     batch_frames: int = 50
++    model_url: str | None = None
+ 
+     @classmethod
+     def from_env(cls) -> "WorkerSettings":
+         return cls(
+             lease_s=float(os.environ.get("FRAMEWISE_LEASE_S", "30")),
+             max_attempts=int(os.environ.get("FRAMEWISE_MAX_ATTEMPTS", "3")),
++            model_url=os.environ.get("FRAMEWISE_MODEL_URL") or None,
+         )
+ 
+ 
+@@ -71,6 +74,17 @@
+         self.profiles = profiles
+         self.settings = settings
+         self.stop = threading.Event()
++        self._model: ModelClient | None = None
++
++    def model(self) -> ModelClient:
++        """The model server's client: made once, it remembers each model's contract."""
++        if self._model is None:
++            if not self.settings.model_url:
++                raise ModelError(
++                    "the profile's detector is remote, and FRAMEWISE_MODEL_URL isn't set"
++                )
++            self._model = ModelClient(self.settings.model_url)
++        return self._model
+ 
+     def run_forever(self) -> None:
+         while not self.stop.is_set():
+@@ -108,7 +122,7 @@
+         profile = self.profiles[job.profile]
+         sightings: list[tuple[float, set[str]]] = []
+         batch: list[Detection] = []
+-        for frame_number, result in enumerate(detect_frames(path, profile, should_stop), 1):
++        for frame_number, result in enumerate(self._results(path, profile, should_stop), 1):
+             boxes = [b for b in result.boxes if b.label in profile.labels]
+             sightings.append((result.t_s, {b.label for b in boxes}))
+             batch += [
+@@ -120,3 +134,11 @@
+                 batch = []
+         self.store.add_detections(job.id, batch)
+         return presence(sightings, profile)
++
++    def _results(
++        self, path: Path, profile: Profile, should_stop: Callable[[], bool]
++    ) -> Iterator[FrameResult]:
++        """Every sampled frame's result, in order: from the model server, or from this process."""
++        if profile.detector == "remote":
++            return remote_frames(path, profile, self.model(), should_stop)
++        return detect_frames(path, profile, should_stop)

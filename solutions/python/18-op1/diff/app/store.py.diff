@@ -1,0 +1,80 @@
+--- a/app/store.py
++++ b/app/store.py
+@@ -42,6 +42,15 @@
+     labels: Labels | None
+     attempts: int = 0
+ 
++    frames: int | None = None  # frames analyzed, once DONE
++    analysis_s: float | None = None
++
++    @property
++    def fps(self) -> float | None:
++        if not self.frames or not self.analysis_s:
++            return None
++        return round(self.frames / self.analysis_s, 1)
++
+     def public(self) -> dict[str, Any]:
+         return {
+             "id": self.id,
+@@ -50,6 +59,8 @@
+             "status": self.status.value,
+             "error": self.error,
+             "labels": self.labels or {},
++            "frames": self.frames,
++            "fps": self.fps,
+             "attempts": self.attempts,
+         }
+ 
+@@ -82,7 +93,15 @@
+ 
+ def _job(row: sa.Row) -> Job:
+     return Job(
+-        row.id, row.video_id, row.profile, Status(row.status), row.error, row.labels, row.attempts
++        row.id,
++        row.video_id,
++        row.profile,
++        Status(row.status),
++        row.error,
++        row.labels,
++        row.attempts,
++        frames=row.frames,
++        analysis_s=row.analysis_s,
+     )
+ 
+ 
+@@ -149,6 +168,11 @@
+         self.engine = engine
+         self.rules = rules or {}  # event rules: a finished job stores its episodes
+ 
++    def ping(self) -> None:
++        """Raises if the database can't be reached right now."""
++        with self.engine.connect() as conn:
++            conn.execute(sa.text("SELECT 1"))
++
+     # Videos
+ 
+     def add_video(self, video: Video) -> None:
+@@ -266,7 +290,13 @@
+             )
+ 
+     def finish(
+-        self, job_id: str, status: Status, error: str | None = None, labels: Labels | None = None
++        self,
++        job_id: str,
++        status: Status,
++        error: str | None = None,
++        labels: Labels | None = None,
++        frames: int | None = None,
++        seconds: float | None = None,
+     ) -> None:
+         with self.engine.begin() as conn:
+             if status == Status.DONE:
+@@ -278,6 +308,8 @@
+                     status=status.value,
+                     error=error,
+                     labels=labels,
++                    frames=frames,
++                    analysis_s=seconds,
+                     lease_until=None,
+                     updated_at=sa.func.now(),
+                 )

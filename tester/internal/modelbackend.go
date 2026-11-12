@@ -32,10 +32,8 @@ type modelBackend struct {
 func startModelBackends(harness *test_case_harness.TestCaseHarness, n int) (chan *modelBackend, error) {
 	repo := repoDir(harness)
 	models := filepath.Join(repo, "models")
-	for _, name := range []string{detectModel, classifyModel} {
-		if _, err := os.Stat(filepath.Join(models, name+".onnx")); err != nil {
-			return nil, fmt.Errorf("the model server serves your models/%s.onnx, and it isn't there: keep the starter's models/ in your repository", name)
-		}
+	if _, err := os.Stat(filepath.Join(models, detectModel+".onnx")); err != nil {
+		return nil, fmt.Errorf("the model server serves your models/%s.onnx, and it isn't there: keep the starter's models/ in your repository", detectModel)
 	}
 	script := filepath.Join(tempDir(harness), "model_backend.py")
 	if err := os.WriteFile(script, modelBackendSource, 0o644); err != nil {

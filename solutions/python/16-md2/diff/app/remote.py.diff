@@ -1,0 +1,75 @@
+--- a/app/remote.py
++++ b/app/remote.py
+@@ -1,7 +1,7 @@
+ """The detector on a model server: Triton's HTTP API (the KServe v2 protocol).
+ 
+ The server runs the same yolo26n.onnx as models/. It is a black box with a contract, read from
+-the server rather than assumed: its input size. This module turns frames into requests (with
++the server rather than assumed: its input size and how many images one request may carry. This module turns frames into requests (with
+ model.prepare, as in this process) and answers back into boxes in the video's own coordinates
+ (model.read).
+ """
+@@ -11,6 +11,7 @@
+ import urllib.request
+ from collections.abc import Callable, Iterator
+ from dataclasses import dataclass
++from itertools import batched
+ from pathlib import Path
+ 
+ import numpy as np
+@@ -31,6 +32,7 @@
+ @dataclass(frozen=True)
+ class ModelInfo:
+     size: int  # the input is size x size
++    max_batch: int  # images per request, at most
+ 
+ 
+ class ModelClient:
+@@ -39,13 +41,14 @@
+         self._info: dict[str, ModelInfo] = {}
+ 
+     def info(self, name: str) -> ModelInfo:
+-        """A model's contract, from its metadata (asked once)."""
++        """A model's contract, from its metadata and config (asked once)."""
+         if name not in self._info:
+             metadata = self._get(f"/v2/models/{name}")
++            config = self._get(f"/v2/models/{name}/config")
+             _, _, height, width = metadata["inputs"][0]["shape"]
+             if height != width:
+                 raise ModelError(f"model {name} takes {width}x{height} images, not squares")
+-            self._info[name] = ModelInfo(width)
++            self._info[name] = ModelInfo(width, max(config.get("max_batch_size", 1), 1))
+         return self._info[name]
+ 
+     def infer(self, name: str, images: np.ndarray) -> np.ndarray:
+@@ -98,15 +101,24 @@
+ def remote_frames(
+     path: Path, profile: Profile, client: ModelClient, should_stop: Callable[[], bool]
+ ) -> Iterator[FrameResult]:
+-    """Every sampled frame's result, in order, from the model server, one frame a request.
++    """Every sampled frame's result, in order, from the model server.
+ 
+-    The server's model has its own input size, which needn't be ours.
++    The server's model has its own input size, which needn't be ours. Each request pays a fixed
++    cost however few frames it carries, so frames go in batches as large as the model takes.
++    One batch at a time: the next is read only once this one's answer is back, so at most one
++    batch of frames is ever in memory.
+     """
+     info = client.info(MODEL)
+     with open_video(path) as (capture, video):
+-        for index, frame in frames(capture, profile.every):
++        for batch in batched(frames(capture, profile.every), info.max_batch):
+             if should_stop():
+                 raise Interrupted
+-            image, fit = model.prepare(frame, info.size)
+-            [output] = client.infer(MODEL, image[None])
+-            yield FrameResult(index, index / video.fps, model.read(output, fit))
++            # One array for the batch, filled in place: 16 images at 640 x 640 are 79 MB.
++            images = np.empty((len(batch), 3, info.size, info.size), np.float32)
++            fits = []
++            for k, (_, frame) in enumerate(batch):
++                images[k], fit = model.prepare(frame, info.size)
++                fits.append(fit)
++            outputs = client.infer(MODEL, images)
++            for (index, _), fit, output in zip(batch, fits, outputs, strict=True):
++                yield FrameResult(index, index / video.fps, model.read(output, fit))

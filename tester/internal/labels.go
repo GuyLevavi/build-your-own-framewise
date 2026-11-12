@@ -17,28 +17,16 @@ type profile struct {
 	every   int
 	maxGapS float64
 	labels  []string
-	model   string // "" is the detector, yolo26n
 }
 
 var allLabels = []string{"person", "car", "bicycle"}
 
-func (p profile) modelName() string {
-	if p.model == "" {
-		return detectModel
-	}
-	return p.model
-}
-
 // expectedLabels is what analyzing s with p must report: for each label p
-// keeps that appears in a sampled frame (as a detection, or as the classifier's
-// top class), its presence segments.
+// keeps that the detector finds in a sampled frame, its presence segments.
 func expectedLabels(s scene, p profile) map[string][]segment {
 	want := map[string][]segment{}
 	for _, label := range p.labels {
 		frames := s.presenceFrames(label, p.every)
-		if p.modelName() == classifyModel {
-			frames = s.classFrames(label, p.every)
-		}
 		if segs := groupFrames(frames, s.fps, p.maxGapS); len(segs) > 0 {
 			want[label] = segs
 		}

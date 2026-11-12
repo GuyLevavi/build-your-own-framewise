@@ -4,7 +4,7 @@
 -"""Runs jobs: one background thread fed by a queue of job ids."""
 +"""`work`: a process that claims jobs from Postgres and runs them, one at a time.
 +
-+It runs beside the API, not inside it: the API only records jobs.
++Run as many as you like: each claim is a transaction, so no two workers take the same job.
 +"""
  
  import logging

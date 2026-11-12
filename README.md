@@ -1,18 +1,24 @@
 # Build your own Framewise
 
 A CodeCrafters-style course for a junior backend developer, alongside the Framewise assignment
-(`../framewise/ASSIGNMENTS.md`). In 30 stages, each checked by a black-box tester, the learner
+(`../framewise/ASSIGNMENTS.md`). In 23 stages, each checked by a black-box tester, the learner
 grows a Python CLI into a video-analysis service: an API, a Postgres job queue with workers that
-survive crashes, results queried in SQL, multi-process performance work, a model server called
-over Triton's HTTP protocol, metrics, live progress and outage handling. The last five ship it: a
-GitLab pipeline that gates merges, an image, a pod, a Helm chart and a release that is a Git commit.
+survive crashes, results queried in SQL, a model server called over Triton's HTTP protocol in
+batches, structured logs and readiness, and API keys. The last four ship it: a GitLab pipeline
+that gates merges, an image, a pod, and a Helm chart for OpenShift whose migrations run as a hook.
+
+It is written for a backend engineer new to both infrastructure and video. Every stage has a
+"New here?" list of the terms it uses and three levels of hints, from the idea to the shape of a
+solution to the usual traps, each folded away until the learner opens it. Expect about 75 to 95
+hours in all (the table below has an estimate per stage): about two and a half weeks full time, or
+8 to 10 hours a week alongside the ten-week assignment.
 
 Computer vision is a black box here, as it is for a backend engineer handed a model by a research
-team. The starter ships two real models as `.onnx` files: Ultralytics' YOLO26 nano detector and
-classifier (`starter_templates/python/code/models/`), with a model card that is their whole
-contract: the input tensor and how to prepare a frame for it, the output and which scores count.
-The learner runs them with onnxruntime in-process, and later on a Triton-style model server, and
-never trains or opens them. The learning is in everything around them. Each stage is chosen so the previous design breaks and has to be
+team. The starter ships one real model as an `.onnx` file, Ultralytics' YOLO26 nano detector
+(`starter_templates/python/code/models/`), with a model card that is its whole contract: the
+input tensor and how to prepare a frame for it, the output and which scores count. The learner
+runs it with onnxruntime in-process, and later on a Triton-style model server, and never trains
+or opens it. The learning is in everything around it. Each stage is chosen so the previous design breaks and has to be
 refactored; the stage text says why, under "Why your design just broke".
 
 Everything is in this one repo: the course, its tester (`tester/`) and the learner's attempt
@@ -61,9 +67,9 @@ the tester creates a `fw_test_*` database per stage and drops it afterwards. Uns
 own with podman. SQL in the solutions sticks to PostgreSQL 14 features; the default image is
 `postgres:18`.
 
-### The delivery stages (ci1 to hm2)
+### The delivery stages (ci1 to hm1)
 
-Stages 26 to 30 need `podman`, `helm` (hm1, hm2) and `git` on the machine, as the assignment's
+Stages 20 to 23 need `podman`, `helm` (hm1) and `git` on the machine, as the assignment's
 workstation has. They run your pipeline's jobs in containers, build and run your image, play your
 pod and render your chart, so in container mode `tools/run_tests.sh` runs them with the tester on
 the host, after the other stages. The images they use: `FRAMEWISE_CI_IMAGE` (the CI job image) and
@@ -80,53 +86,54 @@ static helm (`bin/helm`, the flake's `.#helm`). Run it from `nix develop` with p
 `IMAGES=0` or `HELM=` leave those out. The image names in `tools/images.env` are the defaults
 everywhere (the tester, `.gitlab-ci.yml`), so nothing needs setting on either side. Python
 dependencies come from the package index the network mirrors (onnxruntime, OpenCV, NumPy and the
-rest; no PyTorch); the models are files in the starter, so nothing is downloaded at run time.
+rest; no PyTorch); the model is a file in the starter, so nothing is downloaded at run time.
 
 ## Stages
 
-| # | Slug | Stage | What breaks |
-| --- | --- | --- | --- |
-| 1 | pb1 | Probe a video | |
-| 2 | pb2 | Fail cleanly | errors become a type |
-| 3 | an1 | Analyze a clip | |
-| 4 | an2 | Analyze a long clip | lists of frames → generators (memory budget) |
-| 5 | an3 | Profiles in YAML | flags → validated config |
-| 6 | ap1 | Upload a video | bodies streamed to disk |
-| 7 | ap2 | Run jobs | analysis off the request path |
-| 8 | ap3 | Survive a restart | in-memory state → Postgres repository, migrations |
-| 9 | wk1 | Separate the worker | thread → `work` process, the DB is the queue |
-| 10 | wk2 | Many workers | `FOR UPDATE` → `SKIP LOCKED` |
-| 11 | wk3 | Crashed workers | claims get leases, heartbeats, attempts |
-| 12 | wk4 | Stop gracefully | SIGTERM, give the job back |
-| 13 | rs1 | Store detections | analysis split into frames and consumers; batches; an index |
-| 14 | rs2 | Events in SQL | gaps-and-islands with window functions |
-| 15 | rs3 | Retries without duplicates | idempotent writes; episodes keyed by what they are |
-| 16 | pf1 | Run the model smaller | input size becomes a profile setting; one function owns the letterbox (fps budget) |
-| 17 | pf2 | Use every core | process pool over frame ranges, onnxruntime threads shared out (speed-up and memory budget) |
-| 18 | pf3 | When a process dies | `Pool` hangs; executor + attempts |
-| 19 | md1 | Call a model server | where the model runs becomes a setting; the server's input size, FP32 tensors over HTTP |
-| 20 | md2 | Batch and pipeline | one frame at a time → batches in flight, with backpressure (fps and memory budget) |
-| 21 | md3 | When the model server fails | timeouts, retry policy, failing a job clearly |
-| 22 | op1 | Metrics and logs | Prometheus, fps per job, JSON logs with context |
-| 23 | op2 | Live progress | SSE + LISTEN/NOTIFY |
-| 24 | op3 | Survive a database outage | liveness vs readiness, 503s, backoff |
-| 25 | hd1 | API keys | constant-time comparison, one auth layer |
-| 26 | ci1 | Gate merges | "passes on my machine" → a pipeline on a clean clone |
-| 27 | im1 | Build an image | a checkout as you → an image as a random UID, PID 1 |
-| 28 | im2 | Run the pod | startup order, `--host`, config from a ConfigMap |
-| 29 | hm1 | Chart it | one pod → Deployments, Service, Route, Secret, RWX claim |
-| 30 | hm2 | Release by commit | `helm upgrade` by hand → a commit Argo CD syncs |
+| # | Slug | Stage | What breaks | Hours |
+| --- | --- | --- | --- | --- |
+| 1 | pb1 | Probe a video |  | 1 |
+| 2 | pb2 | Fail cleanly | errors become a type | 1.5 |
+| 3 | an1 | Analyze a clip |  | 6 |
+| 4 | an2 | Analyze a long clip | lists of frames → generators (memory budget) | 1.5 |
+| 5 | an3 | Profiles in YAML | flags → validated config | 3 |
+| 6 | ap1 | Upload a video | bodies streamed to disk | 3 |
+| 7 | ap2 | Run jobs | analysis off the request path | 3 |
+| 8 | ap3 | Survive a restart | in-memory state → Postgres repository, migrations (Alembic set up in the starter) | 8 |
+| 9 | wk1 | Run workers | thread → `work` processes, the DB is the queue, `SKIP LOCKED` | 5 |
+| 10 | wk2 | Crashed workers | claims get leases, heartbeats, attempts | 5 |
+| 11 | wk3 | Stop gracefully | SIGTERM, give the job back | 2 |
+| 12 | rs1 | Store detections | analysis split into frames and consumers; batches; an index | 4 |
+| 13 | rs2 | Events in SQL | gaps-and-islands with window functions | 6 |
+| 14 | rs3 | Retries without duplicates | idempotent writes; episodes keyed by what they are | 4 |
+| 15 | md1 | Call a model server | where the model runs becomes a setting; the server's input size, FP32 tensors over HTTP | 6 |
+| 16 | md2 | Send batches | one frame a request → batches of `max_batch_size` (fps and memory budget) | 3 |
+| 17 | md3 | When the model server fails | timeouts, retry policy, failing a job clearly | 4 |
+| 18 | op1 | Logs and readiness | JSON logs with context, fps per job, liveness vs readiness | 4 |
+| 19 | hd1 | API keys | constant-time comparison, one auth layer | 1.5 |
+| 20 | ci1 | Gate merges | "passes on my machine" → a pipeline on a clean clone | 4 |
+| 21 | im1 | Build an image | a checkout as you → an image as a random UID, PID 1 | 4 |
+| 22 | im2 | Run the pod | startup order, `--host`, config from a ConfigMap | 4 |
+| 23 | hm1 | Chart it | one pod → Deployments, Service, Route, Secret, RWX claim; migrations as a Helm hook | 6 |
+
+Hours are for a backend engineer new to the domain, using the hints; about 90 in all. Someone who
+has run Postgres queues or Helm charts before goes much faster through those stages.
+
+Cut from earlier versions of the course, because the assignment doesn't need them: input size as
+a profile setting, multi-process analysis and broken process pools (pf1 to pf3), live progress
+over SSE and LISTEN/NOTIFY, surviving a database outage (beyond readiness), Prometheus metrics,
+keeping several model-server requests in flight, the classifier model, and releasing by a Git
+commit that Argo CD syncs (the assignment covers Argo CD, with devops).
 
 Performance targets are relative to the same machine (calibrated in the same test), so they hold on
-a laptop, the pod or CI; pf2 needs at least 2 CPUs. The md stages' targets come from the tester's
+a laptop, the pod or CI. The md stages' targets come from the tester's
 own model server, which adds a fixed cost per request. That server is a stand-in for Triton (the
 KServe v2 HTTP protocol, binary tensors, `max_batch_size` and `instance_group` in its config) that
-runs the learner's own `models/*.onnx` with onnxruntime, so the learner meets Triton's contract
-with the same models. Not covered here: training or evaluating a model, the evaluation gate,
-pushing to Quay,
-the live cluster, Splunk and Argo CD's sync. The delivery stages check
-everything up to those: the pipeline's jobs, the image, the pod, the rendered chart and the release
-commit. The assignment covers the rest.
+runs the learner's own `models/yolo26n.onnx` with onnxruntime, so the learner meets Triton's
+contract with the same model. Not covered here: training or evaluating a model, the evaluation gate,
+pushing to Quay, the live cluster, Splunk and Argo CD. The delivery stages check everything up
+to those: the pipeline's jobs, the image, the pod and the rendered chart. The assignment covers
+the rest.
 
 ## Reviewing
 
@@ -148,7 +155,7 @@ passing.
 | `starter_templates/` | the source of the starter; `compiled_starters/python` is generated from it |
 | `solutions/python/NN-slug/code` | reference solution for each stage (passes it and all earlier ones) |
 | `solutions/python/NN-slug/diff` | what that stage changed in the learner's files (`app/`, and from ci1 `tests/`, `.gitlab-ci.yml`, `Containerfile`, `deploy/`) |
-| `starter_templates/python/code/models/` | the two `.onnx` models, their labels and their model card |
+| `starter_templates/python/code/models/` | the `.onnx` detector, its labels and its model card |
 | `dockerfiles/python-3.12.Dockerfile` | the image programs run in (container mode) |
 | `tools/run_tests.sh` | run the tester against one directory, without Nix |
 | `tools/verify_course.sh` | prove every stage: solution N passes 1..N, solution N-1 fails stage N |
@@ -156,7 +163,7 @@ passing.
 | `tools/fast_track.sh` | the reviewer's fast track |
 | `tools/brief.py` | the reviewer's brief for a stage |
 | `tools/make_release.sh` | the airgap tarballs |
-| `.github/workflows/ci.yml` | the checks on GitHub: generated files, briefs, the tester's tests, the flake and `./test.sh`, stages 1 to 5 (all 30 weekly) |
+| `.github/workflows/ci.yml` | the checks on GitHub: generated files, briefs, the tester's tests, the flake and `./test.sh`, stages 1 to 5 (all 23 weekly) |
 | `tools/images.env` | the container images the course uses, by default |
 | `.gitlab-ci.yml` | the same pipeline for the airgapped GitLab: shell checks, `compile.sh` is clean, the tester's vet and unit tests, `verify_course.sh` |
 
@@ -176,7 +183,7 @@ tools/compile.sh                                      # after changing a solutio
 3. `make -C tester copy_course_file build && tools/verify_course.sh NN NN`.
 
 Clips are generated at run time, in Go (`tester/internal/scenes.go`), from real photos of a person
-and cars (`tester/internal/assets/`); what the models find in every frame is recorded in
+and cars (`tester/internal/assets/`); what the model finds in every frame is recorded in
 `tester/internal/golden/` by `tester/golden/make_golden.py`. Re-record after changing a scene or a
 model (that script's header says how); `make -C tester test` checks the numbers the stage texts
 quote.
