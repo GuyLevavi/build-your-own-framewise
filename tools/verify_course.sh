@@ -30,7 +30,8 @@ for n in $(seq "$first" "$last"); do
   if tools/run_tests.sh "$solution" "$slug" >"$logs/$n-$slug-pass.log" 2>&1; then
     pass="ok  "
   else
-    pass="FAIL"
+    why="$(grep -a -v 'Test failed' "$logs/$n-$slug-pass.log" | grep -a -o $'\e\\[91m.*' | head -1 | sed $'s/\e\\[[0-9;]*m//g')"
+    pass="FAIL ($(grep -a -o '^\[stage-[0-9]*\]' "$logs/$n-$slug-pass.log" | tail -1): ${why:0:110})"
     failures=$((failures + 1))
   fi
   if tools/run_tests.sh "$previous" "$slug" --only >"$logs/$n-$slug-previous.log" 2>&1; then
