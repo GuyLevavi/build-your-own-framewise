@@ -10,7 +10,7 @@ A model server is fast per frame and slow per request: each call pays for the ne
 
 ### Expected behaviour
 
-- A job with a remote profile reaches at least **70%** of the frame rate that full batches, sent one at a time, can reach on the model server described below.
+- A job with a remote profile reaches at least **40%** of the frame rate that full batches, sent one at a time, can reach on the model server described below (the rest is your worker reading and preparing frames between requests), and its requests carry at least 8 frames on average.
 - The worker stays under **its idle memory plus 1000 MiB** while it does.
 - Labels and stored detections are what they were.
 
@@ -18,7 +18,7 @@ The model's config (`GET /v2/models/yolo26n/config`) says what it accepts: `max_
 
 ### Tests
 
-The tester first times the model on one frame and on a full batch on this machine. That gives the rate of one frame per request (about 3 frames per second), the rate of full batches sent one at a time, and the target, 70% of the latter. It measures your idle worker's memory, then runs the 1080p clip (200 frames) with the remote profile. It measures frames per second from the server's side, from the first request to the last answer, and samples the memory of the worker's whole process group every 50 ms. If the worker goes over three times its budget, the tester stops it. It checks the labels and the row count in `results.detections`.
+The tester first times the model on one frame and on a full batch on this machine. That gives the rate of one frame per request (about 3 frames per second), the rate of full batches sent one at a time, and the target, 40% of the latter (one frame a request makes about a fifth of it). It measures your idle worker's memory, then runs the 1080p clip (200 frames) with the remote profile. It measures frames per second from the server's side, from the first request to the last answer, and samples the memory of the worker's whole process group every 50 ms. If the worker goes over three times its budget, the tester stops it. It checks the average frames per request, the labels and the row count in `results.detections`.
 
 ### Why your design just broke
 

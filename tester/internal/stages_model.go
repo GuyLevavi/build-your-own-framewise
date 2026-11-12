@@ -158,13 +158,16 @@ func testRemoteDetector(harness *test_case_harness.TestCaseHarness) error {
 
 // md2's model server: every request costs batchLatency on top of running the
 // model. The target is a share of what sending full batches one at a time can
-// reach, measured on this machine before the job: one frame a request makes
-// about a tenth of it, so only batches get there.
+// reach, measured on this machine before the job. Reading and preparing 1080p
+// frames between requests costs time the calibration doesn't count, so the share
+// is well under 1; one frame a request makes about a fifth of the full-batch
+// rate, so only batches get there. Requests must also carry half a full batch
+// on average.
 const (
 	batchLatency   = 300 * time.Millisecond
 	batchMax       = 16
 	batchInstances = 2
-	batchShare     = 0.7
+	batchShare     = 0.4
 	batchMemoryMiB = 1000
 )
 
@@ -244,6 +247,10 @@ func testBatching(harness *test_case_harness.TestCaseHarness) error {
 		return fmt.Errorf("expected at least %.1f frames/s from the model server (%.0f%% of full batches one at a time), got %.1f. %s", target, batchShare*100, s.rate(), batchHint(s))
 	}
 	harness.Logger.Successf("✓ %.1f frames/s (target %.1f)", s.rate(), target)
+	if s.meanBatch() < batchMax/2 {
+		return fmt.Errorf("expected requests to carry at least %d frames on average (max_batch_size is %d), got %.1f", batchMax/2, batchMax, s.meanBatch())
+	}
+	harness.Logger.Successf("✓ %.1f frames a request on average", s.meanBatch())
 	if peak > limit {
 		return fmt.Errorf("expected the worker to stay under %.0f MiB (idle plus %d MiB), it peaked at %.0f MiB after %.1f s. Frames waiting for the model take memory; bound how many are read ahead", mib(limit), batchMemoryMiB, mib(peak), at.Seconds())
 	}
